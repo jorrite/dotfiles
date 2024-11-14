@@ -4,7 +4,7 @@
 
 ## Setup
 
-[!IMPORTANT]
+> [!IMPORTANT]
 > This setup and these dotfiles are applicable to me only and will thus not work for anyone else. Please use this repository for educational purposes only.
 
 ```bash
