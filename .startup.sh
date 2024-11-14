@@ -2,13 +2,6 @@
 
 set -e
 
-prompt_user_onepassword() {
-  echo "Please open 1Password, log into all accounts, and activate 'Integrate with 1Password CLI' under Settings > CLI."
-  echo "Press any key to continue..."
-  read -n 1 -s -r
-  echo
-}
-
 # Bootstrap script for new machines
 
 xcode-select --install || echo "XCode already installed"
@@ -31,7 +24,10 @@ else
     brew install 1password-cli
 fi
 
-prompt_user_onepassword
+echo "Please open 1Password, log into all accounts and set under Settings>CLI activate Integrate with 1Password CLI."
+echo "Press any key to continue..."
+read -n 1 -s -r < /dev/tty
+echo
 
 brew install chezmoi
 chezmoi init jorrite
