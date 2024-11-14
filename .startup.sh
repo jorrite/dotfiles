@@ -24,7 +24,7 @@ else
     brew install 1password-cli
 fi
 
-read -p "Please open 1Password, log into all accounts and set under Settings>CLI activate Integrate with 1Password CLI. Press any key to continue." -n 1 -r echo
+read -p "Please open 1Password, log into all accounts and set under Settings>CLI activate Integrate with 1Password CLI. Press any key to continue." -n 1 -r
 
 brew install chezmoi
 chezmoi init jorrite
