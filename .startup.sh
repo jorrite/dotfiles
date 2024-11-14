@@ -26,7 +26,8 @@ fi
 
 echo "Please open 1Password and: "
 echo "- Log into all accounts"
-echo "- Activate Integrate with 1Password CLI under Settings>CLI"
+echo "- Activate Integrate with 1Password CLI under Developer>CLI"
+echo "- Enable the 1Password SSH agent under Developer>SSH-agent "
 read -n 1 -s -r < /dev/tty
 echo
 
