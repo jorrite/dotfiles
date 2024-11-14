@@ -25,7 +25,8 @@ else
 fi
 
 echo "Please open 1Password, log into all accounts and set under Settings>CLI activate Integrate with 1Password CLI."
-read -n 1 -r -s -p "Press any key to continue..."
+echo "Press any key to continue..."
+read -n 1 -s -r
 echo
 
 brew install chezmoi
