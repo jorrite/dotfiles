@@ -1,0 +1,12 @@
+{{ $computer := promptString "computer type (work/personal)" -}}
+
+[data]
+  [data.user]
+    name  = "Jorrit Elfferich"
+    email = "{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/mbdfrmhwivdj7okksjc2jpw6ru/email" }}"
+
+  [data.computer]
+    type = "{{ $computer }}"
+
+[hooks.read-source-state.pre]
+    command = ".local/share/chezmoi/.install-prerequisites.sh"
