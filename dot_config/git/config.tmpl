@@ -10,3 +10,5 @@
 	gpgsign = true
 [url "git@github.com:"]
 	insteadOf = https://github.com/
+[core]
+    excludesfile = {{ .chezmoi.homeDir }}/.config/git/gitignore_global
