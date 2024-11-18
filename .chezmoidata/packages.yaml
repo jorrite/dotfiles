@@ -3,6 +3,7 @@ packages:
     taps: []
     brews:
       - commitizen
+      - fish
       - pre-commit
     casks: []
     mas: []
