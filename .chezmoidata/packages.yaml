@@ -1,0 +1,18 @@
+packages:
+  universal:
+    taps: []
+    brews:
+      - commitizen
+      - pre-commit
+    casks: []
+    mas: []
+  work:
+    taps: []
+    brews: []
+    casks: []
+    mas: []
+  personal:
+    taps: []
+    brews: []
+    casks: []
+    mas: []
