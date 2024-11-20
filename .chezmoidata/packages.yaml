@@ -19,6 +19,7 @@ packages:
       - istat-menus
       - keybase
       - raycast
+      - warp
     mas:
       - name: "Amphetamine"
         id: "937984704"
