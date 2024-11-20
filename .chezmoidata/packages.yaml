@@ -7,7 +7,13 @@ packages:
       - fish
       - pre-commit
     casks: []
-    mas: []
+    mas:
+      - name: "Amphetamine"
+        id: "937984704"
+      - name: "NextDNS"
+        id: "1464122853"
+      - name: "Things 3"
+        id: "904280696"
   work:
     taps: []
     brews: []
