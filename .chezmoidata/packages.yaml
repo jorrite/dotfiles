@@ -1,12 +1,24 @@
 packages:
   universal:
-    taps: []
+    taps:
+      - homebrew/bundle
     brews:
       - age
       - commitizen
       - fish
+      - git
+      - jq
       - pre-commit
-    casks: []
+      - yq
+    casks:
+      - archiver
+      - bartender
+      - cleanshot
+      - daisydisk
+      - docker
+      - istat-menus
+      - keybase
+      - raycast
     mas:
       - name: "Amphetamine"
         id: "937984704"
@@ -16,7 +28,8 @@ packages:
         id: "904280696"
   work:
     taps: []
-    brews: []
+    brews:
+      - awscli
     casks: []
     mas: []
   personal:

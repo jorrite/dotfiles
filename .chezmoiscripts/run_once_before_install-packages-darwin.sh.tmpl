@@ -2,6 +2,7 @@
 #!/bin/bash
 {{ $packages := merge .packages.universal (get .packages .computer.type) }}
 brew bundle --no-lock --file=/dev/stdin <<EOF
+cask_args appdir: "/Applications"
 {{ range (concat .packages.universal.taps (get .packages .computer.type).taps | mustUniq) -}}
 tap {{ . | quote | replace " " "\", \"" }}
 {{ end -}}
