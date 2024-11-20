@@ -1,5 +1,10 @@
 {{ $computer := promptString "computer type (work/personal)" -}}
 
+encryption = "age"
+[age]
+  identity  = "{{ .chezmoi.homeDir }}/.config/age/key.txt"
+  recipient = "{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/public" }}"
+
 [data]
   [data.user]
     name  = "Jorrit Elfferich"

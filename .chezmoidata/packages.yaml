@@ -2,6 +2,7 @@ packages:
   universal:
     taps: []
     brews:
+      - age
       - commitizen
       - fish
       - pre-commit
