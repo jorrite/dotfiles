@@ -1,40 +1,79 @@
 packages:
   universal:
     taps:
+      - 1password/tap
       - homebrew/bundle
+      - oven-sh/bun
     brews:
       - age
-      - commitizen
+      - bun
+      - chezmoi
       - fish
       - git
+      - go
       - jq
-      - pre-commit
+      - mas
+      - tenv
+      - tree
+      - uv
       - yq
     casks:
-      - archiver
+      - 1password
+      - 1password-cli
+      - affinity
       - bartender
       - cleanshot
       - daisydisk
-      - docker
+      - docker-desktop
       - istat-menus
-      - keybase
+      - keka
       - raycast
       - warp
+      - transmit
+      - zed
     mas:
+      - name: "1Password for Safari"
+        id: "1569813296"
       - name: "Amphetamine"
         id: "937984704"
-      - name: "NextDNS"
-        id: "1464122853"
+      - name: "Hush Nag Blocker"
+        id: "1544743900"
+      - name: "Keynote"
+        id: "409183694"
+      - name: "Numbers"
+        id: "409203825"
+      - name: "Pages"
+        id: "409201541"
+      - name: "Hush Nag Blocker"
+        id: "1544743900"
       - name: "Things 3"
         id: "904280696"
+      - name: "WhatsApp"
+        id: "310633997"
+      - name: "Xcode"
+        id: "497799835"
+    bun:
+      - prettier
+    uv:
+      - commitizen
+      - pre-commit
   work:
     taps: []
     brews:
       - awscli
-    casks: []
-    mas: []
+    casks:
+      - microsoft-teams
+    mas:
+      - name: "Slack"
+        id: "803453959"
+    bun: []
+    uv: []
   personal:
     taps: []
     brews: []
     casks: []
-    mas: []
+    mas:
+      - name: "Photomator"
+        id: "1444636541"
+    bun: []
+    uv: []

@@ -1,0 +1,37 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/bin/bash
+
+{{ $privatePackages := (joinPath .chezmoi.sourceDir "/.chezmoitemplates/packages.age" | include | decrypt  | fromYaml).packages  }}
+{{ $publicPackages := .packages }}
+
+# Triggers to trigger on specific changes
+# 1. MacOS build version: {{ output "sw_vers" "--buildVersion" }}
+
+
+brew bundle --file=/dev/stdin <<EOF
+cask_args appdir: "/Applications"
+{{ range (concat $publicPackages.universal.taps $privatePackages.universal.taps (get $publicPackages .computer.type).taps (get $privatePackages .computer.type).taps | mustUniq)  -}}
+tap {{ . | quote | replace " " "\", \"" }}
+{{ end -}}
+{{ range (concat $publicPackages.universal.brews $privatePackages.universal.brews (get $publicPackages .computer.type).brews (get $privatePackages .computer.type).brews | mustUniq) -}}
+brew {{ . | quote }}
+{{ end -}}
+{{ range (concat $publicPackages.universal.casks $privatePackages.universal.casks (get $publicPackages .computer.type).casks (get $privatePackages .computer.type).casks | mustUniq) -}}
+cask {{ . | quote }}
+{{ end -}}
+{{ range (concat $publicPackages.universal.mas $privatePackages.universal.mas (get $publicPackages .computer.type).mas (get $privatePackages .computer.type).mas | mustUniq) -}}
+mas {{ .name | quote }}, id: {{ .id }}
+{{ end -}}
+EOF
+
+{{ range (concat $publicPackages.universal.bun $privatePackages.universal.bun (get $publicPackages .computer.type).bun (get $privatePackages .computer.type).bun | mustUniq)  -}}
+bun add --dev --exact {{ . }}
+{{ end -}}
+
+uv python install --default
+
+{{ range (concat $publicPackages.universal.uv $privatePackages.universal.uv (get $publicPackages .computer.type).uv (get $privatePackages .computer.type).uv | mustUniq)  -}}
+uv tool install {{ . }}
+{{ end -}}
+
+{{ end -}}

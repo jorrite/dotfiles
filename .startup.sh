@@ -21,7 +21,7 @@ if type op >/dev/null 2>&1; then
     echo "1Password and 1Password CLI is already installed"
 else
     brew install --cask 1password
-    brew install 1password-cli
+    brew install --cask 1password-cli
 fi
 
 echo "Please open 1Password and: "
