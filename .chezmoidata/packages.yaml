@@ -27,6 +27,7 @@ packages:
       - daisydisk
       - docker-desktop
       - istat-menus
+      - karabiner-elements
       - keka
       - raycast
       - warp

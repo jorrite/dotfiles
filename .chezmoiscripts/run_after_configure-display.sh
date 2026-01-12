@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -e
 
 # Location of the BetterDisplay CLI
 CLI="betterdisplaycli"
