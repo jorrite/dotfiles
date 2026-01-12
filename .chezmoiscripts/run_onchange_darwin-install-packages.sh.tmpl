@@ -7,6 +7,11 @@
 # Triggers to trigger on specific changes
 # 1. MacOS build version: {{ output "sw_vers" "--buildVersion" }}
 
+{{ range (concat $publicPackages.universal.taps $privatePackages.universal.taps (get $publicPackages .computer.type).taps (get $privatePackages .computer.type).taps | mustUniq)  -}}
+brew tap {{ . | quote | replace " " "\", \"" }}
+{{ end -}}
+
+brew install mas
 
 brew bundle --file=/dev/stdin <<EOF
 cask_args appdir: "/Applications"
