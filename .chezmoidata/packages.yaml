@@ -22,6 +22,7 @@ packages:
       - 1password-cli
       - affinity
       - bartender
+      - betterdisplay
       - cleanshot
       - daisydisk
       - docker-desktop
