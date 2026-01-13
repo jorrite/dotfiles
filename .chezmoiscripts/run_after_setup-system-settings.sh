@@ -59,23 +59,27 @@ defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
 # Automatically quit printer app once the print jobs complete
 defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 
+# Quit Safari to ensure preferences are applied
+killall Safari 2>/dev/null || true
+
 # Press Tab to highlight each item on a web page
-defaults write com.apple.Safari WebKitTabToLinksPreferenceKey -bool true
-defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks -bool true
-# Enable Safari’s debug menu
-defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
-# Enable the Develop menu and the Web Inspector in Safari
-defaults write com.apple.Safari IncludeDevelopMenu -bool true
-defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true
-defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled -bool true
+defaults write com.apple.Safari.SandboxBroker WebKitTabToLinksPreferenceKey -bool true
+defaults write com.apple.Safari.SandboxBroker WebKit2TabsToLinks -bool true
+# Enable Safari internal Debug menu
+defaults write com.apple.Safari.SandboxBroker IncludeInternalDebugMenu -bool true
+# Enable Develop menu + Web Inspector
+defaults write com.apple.Safari.SandboxBroker ShowDevelopMenu -bool true
+defaults write com.apple.Safari.SandboxBroker WebKitDeveloperExtrasEnabledPreferenceKey -bool true
+defaults write com.apple.Safari.SandboxBroker WebKit2DeveloperExtrasEnabled -bool true
 # Disable Safari AutoFill
-defaults write com.apple.Safari AutoFillPasswords -bool false
-defaults write com.apple.Safari AutoFillCreditCardData -bool false
-defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
+defaults write com.apple.Safari.SandboxBroker AutoFillPasswords -bool false
+defaults write com.apple.Safari.SandboxBroker AutoFillCreditCardData -bool false
+defaults write com.apple.Safari.SandboxBroker AutoFillMiscellaneousForms -bool false
 # Enable “Do Not Track”
-defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
+defaults write com.apple.Safari.SandboxBroker SendDoNotTrackHTTPHeader -bool true
+
 # Update extensions automatically
-defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
+defaults write com.apple.Safari.SandboxBroker InstallExtensionUpdatesAutomatically -bool true
 
 dockutil --remove all --no-restart
 
