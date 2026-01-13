@@ -24,7 +24,7 @@ open_with_instructions() {
 # === Karabiner-Elements ===
 open_with_instructions "Karabiner-Elements" \
 "Karabiner-Elements needs Input Monitoring and Accessibility permissions.
-Go to System Settings → Privacy & Security and allow Karabiner."
+Go to System Settings and allow Karabiner."
 
 echo
 echo "✅ Setup guide complete! All apps have been opened for configuration."
