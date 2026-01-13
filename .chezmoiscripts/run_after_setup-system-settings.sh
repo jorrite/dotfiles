@@ -19,4 +19,10 @@ osascript -e 'tell application "System Settings" to quit'
 defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 2
 # Always show bluetooth in menubar
 defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 2
+
+defaults write com.apple.menuextra.clock "Show24Hour" -bool "true"
+defaults write com.apple.menuextra.clock "ShowDate" -bool "true"
+defaults write com.apple.menuextra.clock "ShowDayOfWeek" -bool "true"
+defaults write com.apple.menuextra.clock "ShowSeconds" -bool "true"
+
 killall ControlCenter
