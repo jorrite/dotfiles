@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -e
 
 # Setup fish shell
 echo "> Using fish shell"

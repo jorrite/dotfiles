@@ -11,8 +11,6 @@
 brew tap {{ . | quote | replace " " "\", \"" }}
 {{ end -}}
 
-brew install mas
-
 brew bundle --file=/dev/stdin <<EOF
 cask_args appdir: "/Applications"
 {{ range (concat $publicPackages.universal.taps $privatePackages.universal.taps (get $publicPackages .computer.type).taps (get $privatePackages .computer.type).taps | mustUniq)  -}}
@@ -24,10 +22,22 @@ brew {{ . | quote }}
 {{ range (concat $publicPackages.universal.casks $privatePackages.universal.casks (get $publicPackages .computer.type).casks (get $privatePackages .computer.type).casks | mustUniq) -}}
 cask {{ . | quote }}
 {{ end -}}
+EOF
+
+if sysctl -n machdep.cpu.brand_string | grep -qi "Virtual"; then
+  SKIP_MAS=true
+else
+  SKIP_MAS=false
+fi
+
+if [ "$SKIP_MAS" = false ]; then
+    brew bundle --file=/dev/stdin <<EOF
+cask_args appdir: "/Applications"
 {{ range (concat $publicPackages.universal.mas $privatePackages.universal.mas (get $publicPackages .computer.type).mas (get $privatePackages .computer.type).mas | mustUniq) -}}
 mas {{ .name | quote }}, id: {{ .id }}
 {{ end -}}
 EOF
+fi
 
 {{ range (concat $publicPackages.universal.bun $privatePackages.universal.bun (get $publicPackages .computer.type).bun (get $privatePackages .computer.type).bun | mustUniq)  -}}
 bun add --dev --exact {{ . }}
