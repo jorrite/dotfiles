@@ -26,6 +26,9 @@ packages:
       - cleanshot
       - daisydisk
       - docker-desktop
+      - font-geist
+      - font-geist-mono
+      - font-geist-mono-nerd-font
       - istat-menus
       - karabiner-elements
       - keka
