@@ -59,27 +59,52 @@ defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
 # Automatically quit printer app once the print jobs complete
 defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 
-# Quit Safari to ensure preferences are applied
-killall Safari 2>/dev/null || true
+if [[ -d "$HOME/Library/Containers/com.apple.Safari/Data/Library/Preferences" && -w "$HOME/Library/Containers/com.apple.Safari/Data/Library/Preferences" ]]; then
+    # Quit Safari to ensure preferences are applied
+    killall Safari 2>/dev/null || true
 
-# Press Tab to highlight each item on a web page
-defaults write com.apple.Safari WebKitTabToLinksPreferenceKey -bool true
-defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks -bool true
-# Enable Safari’s debug menu
-defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
-# Enable the Develop menu and the Web Inspector in Safari
-defaults write com.apple.Safari IncludeDevelopMenu -bool true
-defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true
-defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled -bool true
-# Disable Safari AutoFill
-defaults write com.apple.Safari AutoFillFromAddressBook -bool false
-defaults write com.apple.Safari AutoFillPasswords -bool false
-defaults write com.apple.Safari AutoFillCreditCardData -bool false
-defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
-# Enable “Do Not Track”
-defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
-# Update extensions automatically
-defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
+    # Press Tab to highlight each item on a web page
+    defaults write com.apple.Safari WebKitTabToLinksPreferenceKey -bool true
+    defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks -bool true
+    # Enable Safari’s debug menu
+    defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
+    # Enable the Develop menu and the Web Inspector in Safari
+    defaults write com.apple.Safari IncludeDevelopMenu -bool true
+    defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true
+    defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled -bool true
+    # Disable Safari AutoFill
+    defaults write com.apple.Safari AutoFillFromAddressBook -bool false
+    defaults write com.apple.Safari AutoFillPasswords -bool false
+    defaults write com.apple.Safari AutoFillCreditCardData -bool false
+    defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
+    # Enable “Do Not Track”
+    defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
+    # Update extensions automatically
+    defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
+else
+  echo "⚠️  Safari preferences could not be written."
+  echo
+  echo "This requires Full Disk Access for your terminal."
+  echo "Without it, Safari settings will be skipped."
+  echo
+  echo "Options:"
+  echo "  [o] Open System Settings → Privacy & Security → Full Disk Access"
+  echo "  [s] Skip Safari configuration"
+  echo
+  read -r -p "Choose (o/s): " choice
+
+  case "$choice" in
+    o|O)
+      echo "➡️  Opening Full Disk Access settings…"
+      open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+      echo
+      echo "➡️  Grant access to your terminal, then re-run chezmoi."
+      ;;
+    *)
+      echo "⏭️  Skipping Safari configuration."
+      ;;
+  esac
+fi
 
 # disable spotlight search
 defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{
