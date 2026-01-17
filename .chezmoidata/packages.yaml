@@ -21,7 +21,6 @@ packages:
       - 1password
       - 1password-cli
       - affinity
-      - bartender
       - betterdisplay
       - cleanshot
       - daisydisk
@@ -29,7 +28,6 @@ packages:
       - font-geist
       - font-geist-mono
       - font-geist-mono-nerd-font
-      - istat-menus
       - karabiner-elements
       - keka
       - raycast

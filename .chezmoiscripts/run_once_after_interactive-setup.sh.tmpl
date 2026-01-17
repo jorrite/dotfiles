@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== Mac setup interactive helper ==="
+echo
+
+# Function to open an app and give instructions
+open_with_instructions() {
+  local app_name="$1"
+  local instructions="$2"
+
+  echo "--------------------------------------------------"
+  echo "Opening $app_name..."
+  echo
+  echo "$instructions"
+  echo
+  echo "Press Enter to open the app and apply the above steps..."
+  read -r
+  open -a "$app_name"
+  echo "Press Enter to continue to the next instructions..."
+  read -r
+}
+
+if sysctl -n machdep.cpu.brand_string | grep -qi "Virtual"; then
+  SKIP_MAS_INSTALLED_APPS=true
+else
+  SKIP_MAS_INSTALLED_APPS=false
+fi
+
+
+# === CleanShot X ===
+open_with_instructions "CleanShot X" \
+"CleanShot X needs Accessibility permissions.
+Go to System Settings and allow CleanShot X.
+Additionally, go to https://licenses.cleanshot.com."
+
+# === DaisyDisk X ===
+open_with_instructions "DaisyDisk" \
+"Configure the license for DaisyDisk. The License is:
+{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
+
+# === Messages ===
+open_with_instructions "Messages" \
+"Configure Messages to sync with iCloud (in preferences)."
+
+# === Music ===
+open_with_instructions "Music" \
+"Sign in on Apple Music."
+
+# === Safari ===
+open_with_instructions "Safari" \
+"Configure extensions in Safari."
+
+# === Safari ===
+open_with_instructions "Transmit" \
+"Configure the license for Transmit. The License is:
+{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
+
+# === Karabiner-Elements ===
+open_with_instructions "Karabiner-Elements" \
+"Karabiner-Elements needs Input Monitoring and Accessibility permissions.
+Go to System Settings and allow Karabiner."
+
+if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
+    # === Things ===
+    open_with_instructions "Things3" \
+    "Open Things and sign in to Things Cloud."
+fi
+
+echo
+echo "✅ Setup guide complete! All apps have been opened for configuration."
+echo "You can now continue with any remaining manual setup."
