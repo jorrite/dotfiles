@@ -110,7 +110,7 @@ fi
 defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{
     enabled = 0;
     value = {
-    parameters = (32, 49, 1048576);
+    parameters = (32, 49, 1966080);
     type = "standard";
     };
 }'
