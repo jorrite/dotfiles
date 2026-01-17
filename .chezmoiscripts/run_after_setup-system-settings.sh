@@ -122,6 +122,7 @@ open -a Raycast
 sleep 2
 killall Raycast 2>/dev/null || true
 defaults write -app Raycast raycastGlobalHotkey "Command-49"
+open -a Raycast
 
 dockutil --remove all --no-restart
 
