@@ -81,6 +81,23 @@ defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
 # Update extensions automatically
 defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
 
+# disable spotlight search
+defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{
+    enabled = 0;
+    value = {
+    parameters = (32, 49, 1048576);
+    type = "standard";
+    };
+}'
+
+
+
+# Configure Raycast on ⌘ + space
+open -a Raycast
+sleep 2
+killall Raycast 2>/dev/null || true
+defaults write -app Raycast raycastGlobalHotkey "Command-49"
+
 dockutil --remove all --no-restart
 
 dockutil --add "/Applications/Messages.app" --no-restart
