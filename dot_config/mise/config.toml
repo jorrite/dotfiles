@@ -2,6 +2,7 @@
 golang = "latest"
 bun = "latest"
 npm = "latest"
+node = "latest"
 prettier = "latest"
 pre-commit = "latest"
 python = "latest"
