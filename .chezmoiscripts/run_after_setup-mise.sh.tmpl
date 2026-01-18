@@ -1,0 +1,18 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/bin/bash
+
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+start_timer
+
+log_substep "🔪 Installing dev tools via Mise..."
+mise install
+
+echo
+log_success "Mise packages installed successfully! 🎉"
+end_timer
+
+{{ end -}}
