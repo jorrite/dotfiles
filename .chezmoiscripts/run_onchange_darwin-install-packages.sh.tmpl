@@ -102,42 +102,8 @@ else
     log_info "Skipping Mac App Store apps (virtual machine detected)"
 fi
 
-# Step 4: Install Bun packages
-{{ $bunPackages := concat $publicPackages.universal.bun $privatePackages.universal.bun (get $publicPackages .computer.type).bun (get $privatePackages .computer.type).bun | mustUniq -}}
-{{ if gt (len $bunPackages) 0 -}}
-log_substep "Installing Bun packages ({{ len $bunPackages }} packages)..."
-
-if command -v bun >/dev/null 2>&1; then
-{{ range $bunPackages -}}
-    bun add --dev --exact {{ . }}
-{{ end -}}
-    log_success "Bun packages installed"
-else
-    log_warning "Bun not available, skipping bun packages"
-fi
-{{ end -}}
-
-# Step 5: Install Python tools via uv
-{{ $uvTools := concat $publicPackages.universal.uv $privatePackages.universal.uv (get $publicPackages .computer.type).uv (get $privatePackages .computer.type).uv | mustUniq -}}
-log_substep "Setting up Python environment ({{ len $uvTools }} tools)..."
-
-if command -v uv >/dev/null 2>&1; then
-    # Install default Python version
-    if uv python install --default 2>/dev/null; then
-        log_success "Default Python version installed"
-    else
-        log_info "Python already installed or managed elsewhere"
-    fi
-
-    # Install uv tools
-{{ range $uvTools -}}
-    uv tool install {{ . }}
-{{ end -}}
-    log_success "Python tools installed"
-else
-    log_error "uv command not available"
-    exit 1
-fi
+log_substep "Installing dev tools via Mise 🔪..."
+mise install
 
 echo
 log_success "All packages installed successfully! 🎉"

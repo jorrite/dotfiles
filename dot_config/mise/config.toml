@@ -2,3 +2,14 @@
 golang = "latest"
 bun = "latest"
 prettier = "latest"
+uv = "latest"
+python = "latest"
+pre-commit = "latest"
+
+[settings]
+
+[settings.npm]
+package_manager = "bun"
+
+[settings.pipx]
+uvx = true

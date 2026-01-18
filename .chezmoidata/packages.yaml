@@ -12,9 +12,7 @@ packages:
       - jq
       - mas
       - mise
-      - tenv
       - tree
-      - uv
       - yq
     casks:
       - 1password
@@ -54,21 +52,14 @@ packages:
         id: "310633997"
       - name: "Xcode"
         id: "497799835"
-    bun: []
-    uv:
-      - commitizen
-      - pre-commit
   work:
     taps: []
-    brews:
-      - awscli
+    brews: []
     casks:
       - microsoft-teams
     mas:
       - name: "Slack"
         id: "803453959"
-    bun: []
-    uv: []
   personal:
     taps: []
     brews: []
@@ -76,5 +67,3 @@ packages:
     mas:
       - name: "Photomator"
         id: "1444636541"
-    bun: []
-    uv: []
