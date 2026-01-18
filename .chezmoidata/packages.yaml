@@ -9,6 +9,7 @@ packages:
       - dockutil
       - fish
       - git
+      - gnupg
       - jq
       - mas
       - mise
