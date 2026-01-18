@@ -27,13 +27,6 @@ else
   SKIP_MAS_INSTALLED_APPS=false
 fi
 
-
-# === CleanShot X ===
-open_with_instructions "CleanShot X" \
-"CleanShot X needs Accessibility permissions.
-Go to System Settings and allow CleanShot X.
-Additionally, go to https://licenses.cleanshot.com."
-
 # === DaisyDisk X ===
 open_with_instructions "DaisyDisk" \
 "Configure the license for DaisyDisk. The License is:
@@ -59,7 +52,17 @@ open_with_instructions "Transmit" \
 # === System Settings ===
 open_with_instructions "System Settings" \
 "Disable spotlight:
-Open System Settings → Keyboard → spotlight"
+Open System Settings → Keyboard → Keybindings → Spotlight
+Disable spotlight:
+Open System Settings → Keyboard → Keybindings → Screenshots
+"
+
+# === CleanShot X ===
+open_with_instructions "CleanShot X" \
+"CleanShot X needs Accessibility permissions.
+Go to System Settings and allow CleanShot X.
+Additionally, go to https://licenses.cleanshot.com.
+Lastly, configure Keybindings"
 
 # === Karabiner-Elements ===
 open_with_instructions "Karabiner-Elements" \

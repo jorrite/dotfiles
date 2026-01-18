@@ -118,7 +118,7 @@ dockutil --remove all --no-restart
 dockutil --add "/Applications/Messages.app" --no-restart
 dockutil --add "/Applications/Mail.app" --no-restart
 dockutil --add "/Applications/Calendar.app" --no-restart
-dockutil --add "/Applications/Things.app" --no-restart
+dockutil --add "/Applications/Things3.app" --no-restart
 dockutil --add "/Applications/Safari.app" --no-restart
 
 dockutil --add "$HOME/Downloads" --view fan --display stack --sort dateadded --no-restart
