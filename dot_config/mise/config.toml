@@ -1,10 +1,11 @@
 [tools]
 golang = "latest"
 bun = "latest"
+npm = "latest"
 prettier = "latest"
-uv = "latest"
-python = "latest"
 pre-commit = "latest"
+python = "latest"
+uv = "latest"
 
 [settings]
 
