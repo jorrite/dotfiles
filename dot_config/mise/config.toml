@@ -1,0 +1,4 @@
+[tools]
+golang = "latest"
+bun = "latest"
+prettier = "latest"

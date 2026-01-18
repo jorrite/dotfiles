@@ -1,0 +1,193 @@
+#!/bin/bash
+
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+log_step "⚙️  System Settings Configuration"
+
+# Setup fish shell
+log_substep "Configuring Fish shell as default..."
+
+# Validate fish is installed
+if ! command -v /opt/homebrew/bin/fish >/dev/null 2>&1; then
+    log_error "Fish shell not found at /opt/homebrew/bin/fish"
+    log_info "Skipping shell configuration"
+else
+    # Check if fish is the default shell
+    if [ "$SHELL" != "/opt/homebrew/bin/fish" ]; then
+        # Check if fish is in /etc/shells
+        if ! grep -q "/opt/homebrew/bin/fish" /etc/shells; then
+            log_info "Adding fish to /etc/shells (requires sudo)..."
+            echo /opt/homebrew/bin/fish | sudo tee -a /etc/shells >/dev/null
+        fi
+        
+        # Change default shell
+        if chsh -s /opt/homebrew/bin/fish; then
+            log_success "Fish shell set as default"
+        else
+            log_warning "Failed to set fish as default shell"
+        fi
+    else
+        log_success "Fish shell is already the default"
+    fi
+fi
+
+# Close any open System Settings panes
+log_substep "Closing System Settings to prevent conflicts..."
+osascript -e 'tell application "System Settings" to quit' 2>/dev/null || true
+
+log_substep "🖥️  Configuring Menu Bar..."
+# Always show sound in menubar
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 2
+# Always show bluetooth in menubar
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 2
+# Hide spotlight
+defaults -currentHost write com.apple.Spotlight MenuItemHidden -int 1
+
+# Clock settings
+defaults write com.apple.menuextra.clock "Show24Hour" -bool "true"
+defaults write com.apple.menuextra.clock "ShowDate" -bool "true"
+defaults write com.apple.menuextra.clock "ShowDayOfWeek" -bool "true"
+defaults write com.apple.menuextra.clock "ShowSeconds" -bool "true"
+log_success "Menu bar configured"
+
+log_substep "🔒 Configuring Security & Privacy..."
+# Require password immediately after sleep or screen saver begins
+defaults write com.apple.screensaver askForPassword -int 1
+defaults write com.apple.screensaver askForPasswordDelay -int 0
+log_success "Security settings configured"
+
+log_substep "⌨️  Configuring Keyboard & Input..."
+# Allow keyboard navigation on prompts/modals
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+log_success "Keyboard settings configured"
+
+log_substep "🔄 Configuring Software Update..."
+# Check for software updates daily
+defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+log_success "Software update configured"
+
+log_substep "📁 Configuring Finder..."
+# Use column view in Finder
+defaults write com.apple.finder FXPreferredViewStyle -string "clmv"
+defaults write com.apple.finder FXPreferredGroupBy -string "Date Last Opened"
+
+# Empty Trash securely by default
+defaults write com.apple.finder EmptyTrashSecurely -bool true
+log_success "Finder configured"
+
+log_substep "📦 Configuring Dock..."
+# Disable recent applications in Dock
+defaults write com.apple.dock "show-recents" -bool false
+log_success "Dock configured"
+
+log_substep "💾 Configuring System Dialogs..."
+# Expand save panel by default
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
+
+# Expand print panel by default
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+
+# Automatically quit printer app once the print jobs complete
+defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
+log_success "System dialogs configured"
+
+log_substep "🧭 Configuring Safari..."
+
+if [[ -d "$HOME/Library/Containers/com.apple.Safari/Data/Library/Preferences" && -w "$HOME/Library/Containers/com.apple.Safari/Data/Library/Preferences" ]]; then
+    # Quit Safari to ensure preferences are applied
+    killall Safari 2>/dev/null || true
+
+    # Press Tab to highlight each item on a web page
+    defaults write com.apple.Safari WebKitTabToLinksPreferenceKey -bool true
+    defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks -bool true
+    # Enable Safari's debug menu
+    defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
+    # Enable the Develop menu and the Web Inspector in Safari
+    defaults write com.apple.Safari IncludeDevelopMenu -bool true
+    defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true
+    defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled -bool true
+    # Disable Safari AutoFill
+    defaults write com.apple.Safari AutoFillFromAddressBook -bool false
+    defaults write com.apple.Safari AutoFillPasswords -bool false
+    defaults write com.apple.Safari AutoFillCreditCardData -bool false
+    defaults write com.apple.Safari AutoFillMiscellaneousForms -bool false
+    # Enable "Do Not Track"
+    defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
+    # Update extensions automatically
+    defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
+    
+    log_success "Safari configured"
+else
+    log_warning "Safari preferences could not be written"
+    echo
+    log_info "This requires Full Disk Access for your terminal."
+    log_info "Without it, Safari settings will be skipped."
+    echo
+    echo "Options:"
+    echo "  [o] Open System Settings → Privacy & Security → Full Disk Access"
+    echo "  [s] Skip Safari configuration"
+    echo
+    read -r -p "Choose (o/s): " choice
+
+    case "$choice" in
+        o|O)
+            log_info "Opening Full Disk Access settings…"
+            open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+            echo
+            log_info "Grant access to your terminal, then re-run chezmoi apply."
+            ;;
+        *)
+            log_info "Skipping Safari configuration."
+            ;;
+    esac
+fi
+
+# Configure Raycast
+log_substep "🔍 Configuring Raycast..."
+if [ -d "/Applications/Raycast.app" ]; then
+    open -a Raycast
+    sleep 2
+    killall Raycast 2>/dev/null || true
+    defaults write -app Raycast raycastGlobalHotkey "Command-49"
+    open -a Raycast
+    log_success "Raycast configured (Cmd+Space)"
+else
+    log_warning "Raycast not found, skipping configuration"
+fi
+
+# Configure Dock
+log_substep "🔧 Configuring Dock applications..."
+
+if ! command -v dockutil >/dev/null 2>&1; then
+    log_warning "dockutil not found, skipping Dock configuration"
+else
+    # Remove all items
+    dockutil --remove all --no-restart 2>/dev/null || true
+    
+    # Add applications
+    dockutil --add "/Applications/Messages.app" --no-restart 2>/dev/null || true
+    dockutil --add "/Applications/Mail.app" --no-restart 2>/dev/null || true
+    dockutil --add "/Applications/Calendar.app" --no-restart 2>/dev/null || true
+    dockutil --add "/Applications/Things3.app" --no-restart 2>/dev/null || true
+    dockutil --add "/Applications/Safari.app" --no-restart 2>/dev/null || true
+    
+    # Add Downloads folder
+    dockutil --add "$HOME/Downloads" --view fan --display stack --sort dateadded --no-restart 2>/dev/null || true
+    
+    log_success "Dock configured"
+fi
+
+# Restart affected services
+log_substep "Restarting system services..."
+for app in "ControlCenter" "SystemUIServer" "Dock" "Finder"; do
+    killall "${app}" > /dev/null 2>&1 || true
+done
+log_success "System services restarted"
+
+echo
+log_success "System settings configuration complete! 🎉"

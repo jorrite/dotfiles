@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Mac setup interactive helper ==="
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+show_banner
+
+log_info "This script will guide you through configuring various apps."
+log_info "Each app will open with specific instructions."
 echo
 
 # Function to open an app and give instructions
 open_with_instructions() {
   local app_name="$1"
-  local instructions="$2"
+  local emoji="$2"
+  local instructions="$3"
 
-  echo "--------------------------------------------------"
-  echo "Opening $app_name..."
-  echo
+  log_step "${emoji} ${app_name}"
+  echo -e "${YELLOW}Instructions:${RESET}"
   echo "$instructions"
   echo
-  echo "Press Enter to open the app and apply the above steps..."
+  echo -e "${BOLD}Press Enter to open ${app_name}...${RESET}"
   read -r
   open -a "$app_name"
-  echo "Press Enter to continue to the next instructions..."
+  echo -e "${BOLD}Press Enter after you've completed the configuration...${RESET}"
   read -r
+  log_success "${app_name} configuration complete"
 }
 
 if sysctl -n machdep.cpu.brand_string | grep -qi "Virtual"; then
@@ -28,53 +35,69 @@ else
 fi
 
 # === DaisyDisk X ===
-open_with_instructions "DaisyDisk" \
-"Configure the license for DaisyDisk. The License is:
-{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
+open_with_instructions "DaisyDisk" "💾" \
+"Configure the license for DaisyDisk.
+
+License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
 
 # === Messages ===
-open_with_instructions "Messages" \
-"Configure Messages to sync with iCloud (in preferences)."
+open_with_instructions "Messages" "💬" \
+"Configure Messages to sync with iCloud.
+
+➜ Go to Preferences
+➜ Enable iCloud sync"
 
 # === Music ===
-open_with_instructions "Music" \
-"Sign in on Apple Music."
+open_with_instructions "Music" "🎵" \
+"Sign in to Apple Music with your Apple ID."
 
 # === Safari ===
-open_with_instructions "Safari" \
-"Configure extensions in Safari."
+open_with_instructions "Safari" "🧭" \
+"Configure Safari extensions.
 
-# === Safari ===
-open_with_instructions "Transmit" \
-"Configure the license for Transmit. The License is:
-{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
+➜ Go to Safari → Settings → Extensions
+➜ Enable/configure your preferred extensions"
+
+# === Transmit ===
+open_with_instructions "Transmit" "🚀" \
+"Configure the license for Transmit.
+
+License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
 
 # === System Settings ===
-open_with_instructions "System Settings" \
-"Disable spotlight:
-Open System Settings → Keyboard → Keybindings → Spotlight
-Disable spotlight:
-Open System Settings → Keyboard → Keybindings → Screenshots
-"
+open_with_instructions "System Settings" "⚙️" \
+"Configure keyboard shortcuts:
+
+1. Open System Settings → Keyboard → Keyboard Shortcuts
+2. Spotlight:
+   ➜ Disable Spotlight search shortcuts
+3. Screenshots:
+   ➜ Configure your preferred screenshot shortcuts"
 
 # === CleanShot X ===
-open_with_instructions "CleanShot X" \
-"CleanShot X needs Accessibility permissions.
-Go to System Settings and allow CleanShot X.
-Additionally, go to https://licenses.cleanshot.com.
-Lastly, configure Keybindings"
+open_with_instructions "CleanShot X" "📸" \
+"CleanShot X requires system permissions:
+
+1. Grant Accessibility permissions when prompted
+2. Go to https://licenses.cleanshot.com to activate
+3. Configure keyboard shortcuts in preferences"
 
 # === Karabiner-Elements ===
-open_with_instructions "Karabiner-Elements" \
-"Karabiner-Elements needs Input Monitoring and Accessibility permissions.
-Go to System Settings and allow Karabiner."
+open_with_instructions "Karabiner-Elements" "⌨️" \
+"Karabiner-Elements requires system permissions:
+
+1. Grant Input Monitoring permission when prompted
+2. Grant Accessibility permission when prompted
+3. Configure your keyboard modifications"
 
 if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
     # === Things ===
-    open_with_instructions "Things3" \
-    "Open Things and sign in to Things Cloud."
+    open_with_instructions "Things3" "☑️" \
+    "Sign in to Things Cloud.
+
+➜ Go to Settings → Things Cloud
+➜ Sign in with your account"
 fi
 
 echo
-echo "✅ Setup guide complete! All apps have been opened for configuration."
-echo "You can now continue with any remaining manual setup."
+show_celebration

@@ -5,14 +5,13 @@ packages:
       - oven-sh/bun
     brews:
       - age
-      - bun
       - chezmoi
       - dockutil
       - fish
       - git
-      - go
       - jq
       - mas
+      - mise
       - tenv
       - tree
       - uv
@@ -55,8 +54,7 @@ packages:
         id: "310633997"
       - name: "Xcode"
         id: "497799835"
-    bun:
-      - prettier
+    bun: []
     uv:
       - commitizen
       - pre-commit
