@@ -149,19 +149,6 @@ else
     esac
 fi
 
-# Configure Raycast
-log_substep "🔍 Configuring Raycast..."
-if [ -d "/Applications/Raycast.app" ]; then
-    open -a Raycast
-    sleep 2
-    killall Raycast 2>/dev/null || true
-    defaults write -app Raycast raycastGlobalHotkey "Command-49"
-    open -a Raycast
-    log_success "Raycast configured (Cmd+Space)"
-else
-    log_warning "Raycast not found, skipping configuration"
-fi
-
 # Configure Dock
 log_substep "🔧 Configuring Dock applications..."
 
@@ -183,7 +170,9 @@ else
     dockutil --add "/Applications/Messages.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Mail.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Calendar.app" --no-restart 2>/dev/null || true
-    dockutil --add "/Applications/Things3.app" --no-restart 2>/dev/null || true
+    if ! is_virtual_machine; then
+        dockutil --add "/Applications/Things3.app" --no-restart 2>/dev/null || true
+    fi
     dockutil --add "/Applications/Safari.app" --no-restart 2>/dev/null || true
 
     # Add Downloads folder
