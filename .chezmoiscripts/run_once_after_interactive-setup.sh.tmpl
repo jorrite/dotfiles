@@ -143,10 +143,15 @@ if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
 ➜ Sign in with your account"
 fi
 
-xattr -d com.apple.quarantine /Applications/AeroSpace.app
 # === Aerospace ===
 open_with_instructions "AeroSpace" "📺" \
 "AeroSpace requires system permissions:
+
+1. Grant Accessibility permission when prompted"
+
+# === Alcove ===
+open_with_instructions "Alcove" "📺" \
+"Alcove requires system permissions:
 
 1. Grant Accessibility permission when prompted"
 
