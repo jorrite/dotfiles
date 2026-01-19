@@ -6,6 +6,7 @@ packages:
     brews:
       - age
       - chezmoi
+      - defaultbrowser
       - dockutil
       - fish
       - git
@@ -49,6 +50,8 @@ packages:
         id: "1544743900"
       - name: "Things 3"
         id: "904280696"
+      - name: "Velja"
+        id: "1607635845"
       - name: "WhatsApp"
         id: "310633997"
       - name: "Xcode"

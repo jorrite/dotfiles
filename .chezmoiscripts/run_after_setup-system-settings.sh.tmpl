@@ -22,7 +22,7 @@ else
             log_info "Adding fish to /etc/shells (requires sudo)..."
             echo /opt/homebrew/bin/fish | sudo tee -a /etc/shells >/dev/null
         fi
-        
+
         # Change default shell
         if chsh -s /opt/homebrew/bin/fish; then
             log_success "Fish shell set as default"
@@ -39,10 +39,12 @@ log_substep "Closing System Settings to prevent conflicts..."
 osascript -e 'tell application "System Settings" to quit' 2>/dev/null || true
 
 log_substep "🖥️  Configuring Menu Bar..."
-# Always show sound in menubar
-defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 2
-# Always show bluetooth in menubar
-defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 2
+# Hide sound in menubar
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 8
+# Hide bluetooth in menubar
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 8
+# Hide spotlight
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "WiFi" -int 8
 # Hide spotlight
 defaults -currentHost write com.apple.Spotlight MenuItemHidden -int 1
 
@@ -120,7 +122,7 @@ if [[ -d "$HOME/Library/Containers/com.apple.Safari/Data/Library/Preferences" &&
     defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
     # Update extensions automatically
     defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
-    
+
     log_success "Safari configured"
 else
     log_warning "Safari preferences could not be written"
@@ -163,22 +165,30 @@ fi
 # Configure Dock
 log_substep "🔧 Configuring Dock applications..."
 
+# Configure Dock
+log_substep "🧭 Configuring Default browser..."
+if is_virtual_machine; then
+    defaultbrowser safari
+else
+    defaultbrowser velja
+fi
+
 if ! command -v dockutil >/dev/null 2>&1; then
     log_warning "dockutil not found, skipping Dock configuration"
 else
     # Remove all items
     dockutil --remove all --no-restart 2>/dev/null || true
-    
+
     # Add applications
     dockutil --add "/Applications/Messages.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Mail.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Calendar.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Things3.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Safari.app" --no-restart 2>/dev/null || true
-    
+
     # Add Downloads folder
     dockutil --add "$HOME/Downloads" --view fan --display stack --sort dateadded --no-restart 2>/dev/null || true
-    
+
     log_success "Dock configured"
 fi
 

@@ -16,22 +16,42 @@ open_with_instructions() {
   local emoji="$2"
   local instructions="$3"
 
-  log_step "${emoji} ${app_name}"
+  local has_app=false
+  [[ -n "$app_name" ]] && has_app=true
+
+  if $has_app; then
+    log_step "${emoji} ${app_name}"
+  else
+    log_step "${emoji} Instructions"
+  fi
+
   echo -e "${YELLOW}Instructions:${RESET}"
   echo "$instructions"
   echo
-  echo -e "${BOLD}Press Enter to open ${app_name}...${RESET}"
+
+  if $has_app; then
+    echo -e "${BOLD}Press Enter to open ${app_name}...${RESET}"
+    read -r
+    open -a "$app_name"
+    echo -e "${BOLD}Press Enter after you've completed the configuration...${RESET}"
+  else
+    echo -e "${BOLD}Press Enter after you've completed the instructions...${RESET}"
+  fi
   read -r
-  open -a "$app_name"
-  echo -e "${BOLD}Press Enter after you've completed the configuration...${RESET}"
-  read -r
-  log_success "${app_name} configuration complete"
+
+  if $has_app; then
+    log_success "${app_name} configuration complete"
+  else
+    log_success "Instructions completed"
+  fi
 }
 
-if sysctl -n machdep.cpu.brand_string | grep -qi "Virtual"; then
-  SKIP_MAS_INSTALLED_APPS=true
+# Check if running in VM
+if is_virtual_machine; then
+    SKIP_MAS_INSTALLED_APPS=true
+    log_info "Virtual machine detected - Mac App Store app instructions will be skipped"
 else
-  SKIP_MAS_INSTALLED_APPS=false
+    SKIP_MAS_INSTALLED_APPS=false
 fi
 
 # === DaisyDisk X ===
@@ -72,7 +92,8 @@ open_with_instructions "System Settings" "⚙️" \
 2. Spotlight:
    ➜ Disable Spotlight search shortcuts
 3. Screenshots:
-   ➜ Configure your preferred screenshot shortcuts"
+   ➜ Configure your preferred screenshot shortcuts
+4. Hide Menu Items."
 
 # === CleanShot X ===
 open_with_instructions "CleanShot X" "📸" \
@@ -89,6 +110,28 @@ open_with_instructions "Karabiner-Elements" "⌨️" \
 1. Grant Input Monitoring permission when prompted
 2. Grant Accessibility permission when prompted
 3. Configure your keyboard modifications"
+
+# === Control Centre ===
+open_with_instructions "" "⚙️" \
+"Configure Control Center to only keep these:
+
+1. WiFi
+2. Bluetooth
+3. Music
+4. Focus
+5. Dark Mode
+6. Sync View
+7. Screen brightness
+8. Sound"
+
+
+# === Raycast ===
+open_with_instructions "" "⌨️" \
+"Raycast will be configured via a backup file.
+Import Password: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/fise2kkom4wx6nolix4lta6mz4/password" }}"
+
+open ~/.config/raycast/config.rayconfig
+read -r
 
 if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
     # === Things ===
