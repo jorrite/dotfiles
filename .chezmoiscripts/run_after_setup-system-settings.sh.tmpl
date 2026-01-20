@@ -171,7 +171,7 @@ else
     dockutil --add "/Applications/Mail.app" --no-restart 2>/dev/null || true
     dockutil --add "/Applications/Calendar.app" --no-restart 2>/dev/null || true
     if ! is_virtual_machine; then
-        dockutil --add "/Applications/Things3.app" --no-restart 2>/dev/null || true
+        dockutil --add "/Applications/Things3.app" --label 'Things' --no-restart 2>/dev/null || true
     fi
     dockutil --add "/Applications/Safari.app" --no-restart 2>/dev/null || true
 
