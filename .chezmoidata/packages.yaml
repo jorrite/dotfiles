@@ -63,8 +63,15 @@ packages:
     taps: []
     brews: []
     casks:
+      - google-chrome
       - microsoft-teams
     mas:
+      - name: "Azure VPN Client"
+        id: "1553936137"
+      - name: "Okta Verify"
+        id: "490179405"
+      - name: "Windows App"
+        id: "1295203466"
       - name: "Slack"
         id: "803453959"
   personal:
