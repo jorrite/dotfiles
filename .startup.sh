@@ -193,7 +193,7 @@ else
 fi
 
 AGE_DIR="$HOME/.config/age"
-AGE_KEY_FILE="$AGE_DIR/private_key.txt"
+AGE_KEY_FILE="$AGE_DIR/key.txt"
 OP_ITEM="op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/key.txt"
 
 echo "🔐 Bootstrapping age key..."
