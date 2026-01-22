@@ -192,30 +192,41 @@ else
     fi
 fi
 
-
 AGE_DIR="$HOME/.config/age"
-AGE_KEY_FILE="$AGE_DIR/key.txt"
+AGE_KEY_FILE="$AGE_DIR/private_key.txt"
+OP_ITEM="op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/key.txt"
 
-log_info "🔐 Setting up age encryption key..."
+echo "🔐 Bootstrapping age key..."
 
-# Ensure directory exists
+# Ensure op CLI exists
+if ! command -v op >/dev/null 2>&1; then
+  log_error "❌ 1Password CLI (op) not installed"
+  exit 1
+fi
+
+# Ensure signed in
+if ! op account list >/dev/null 2>&1; then
+  log_error "❌ Not signed into 1Password CLI"
+  echo "➡️  Run: op signin"
+  exit 1
+fi
+
+# Create directory
 mkdir -p "$AGE_DIR"
 chmod 700 "$AGE_DIR"
 
-# If key already exists, do nothing
+# Do nothing if key already exists
 if [[ -f "$AGE_KEY_FILE" ]]; then
   log_info "✔ age key already exists, skipping"
   exit 0
 fi
 
-# Write key from 1Password
-cat >"$AGE_KEY_FILE" <<'EOF'
-{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/key.txt" }}
-EOF
+# Read secret from 1Password and write to file
+op read "$OP_ITEM" >"$AGE_KEY_FILE"
 
 chmod 600 "$AGE_KEY_FILE"
 
-log_info "✅ age key installed successfully"
+log_success "✅ age key installed"
 
 log_info "Initializing Chezmoi from repository..."
 if chezmoi init jorrite; then
