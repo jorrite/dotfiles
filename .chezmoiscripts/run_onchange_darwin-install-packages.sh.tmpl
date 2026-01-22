@@ -1,0 +1,109 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/bin/bash
+
+set -e
+
+{{ $privatePackages := (joinPath .chezmoi.sourceDir "/.chezmoitemplates/packages.age" | include | decrypt  | fromYaml).packages  }}
+{{ $publicPackages := .packages }}
+
+# Triggers to trigger on specific changes
+# 1. MacOS build version: {{ output "sw_vers" "--buildVersion" }}
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+start_timer
+
+log_step "📦 Package Installation"
+
+# Validate prerequisites
+log_substep "Validating prerequisites..."
+if ! command -v brew >/dev/null 2>&1; then
+    log_error "Homebrew is not installed. Please run the startup script first."
+    exit 1
+fi
+log_success "Homebrew is available"
+
+# Check if running in VM
+if is_virtual_machine; then
+    SKIP_MAS=true
+    log_info "Virtual machine detected - Mac App Store installations will be skipped"
+else
+    SKIP_MAS=false
+fi
+
+# Count packages for progress display
+{{ $taps := concat $publicPackages.universal.taps $privatePackages.universal.taps (get $publicPackages .computer.type).taps (get $privatePackages .computer.type).taps | mustUniq -}}
+{{ $brews := concat $publicPackages.universal.brews $privatePackages.universal.brews (get $publicPackages .computer.type).brews (get $privatePackages .computer.type).brews | mustUniq -}}
+{{ $casks := concat $publicPackages.universal.casks $privatePackages.universal.casks (get $publicPackages .computer.type).casks (get $privatePackages .computer.type).casks | mustUniq -}}
+{{ $masApps := concat $publicPackages.universal.mas $privatePackages.universal.mas (get $publicPackages .computer.type).mas (get $privatePackages .computer.type).mas | mustUniq -}}
+
+echo
+log_info "Package summary:"
+echo "  🔧 Taps:    {{ len $taps }}"
+echo "  📦 Brews:   {{ len $brews }}"
+echo "  🍺 Casks:   {{ len $casks }}"
+echo "  🍎 MAS:     {{ len $masApps }}"
+echo
+
+# Step 1: Tap repositories
+log_substep "Adding Homebrew taps..."
+{{ range $taps -}}
+brew tap {{ . | quote | replace " " "\", \"" }}
+{{ end -}}
+log_success "Taps added"
+
+# Step 2: Install formulae and casks
+log_substep "Installing Homebrew packages (this may take a while)..."
+
+if retry_with_backoff 3 5 60 brew bundle --file=/dev/stdin <<EOF
+cask_args appdir: "/Applications"
+{{ range $taps -}}
+tap {{ . | quote | replace " " "\", \"" }}
+{{ end -}}
+{{ range $brews -}}
+brew {{ . | quote }}
+{{ end -}}
+{{ range $casks -}}
+cask {{ . | quote }}
+{{ end -}}
+EOF
+then
+    log_success "Homebrew packages installed successfully"
+else
+    log_error "Some Homebrew packages failed to install"
+    log_warning "Continuing with remaining setup..."
+fi
+
+# Step 3: Install Mac App Store apps
+if [ "$SKIP_MAS" = false ]; then
+    log_substep "Installing Mac App Store apps..."
+
+    # Check if mas is available and signed in
+    if ! command -v mas >/dev/null 2>&1; then
+        log_warning "'mas' command not available, skipping App Store apps"
+    elif ! mas account >/dev/null 2>&1; then
+        log_warning "Not signed into Mac App Store, skipping App Store apps"
+        log_info "Sign into the App Store and run 'chezmoi apply' again to install these apps"
+    else
+        if retry_with_backoff 2 5 30 brew bundle --file=/dev/stdin <<EOF
+cask_args appdir: "/Applications"
+{{ range $masApps -}}
+mas {{ .name | quote }}, id: {{ .id }}
+{{ end -}}
+EOF
+        then
+            log_success "Mac App Store apps installed successfully"
+        else
+            log_warning "Some Mac App Store apps failed to install"
+        fi
+    fi
+else
+    log_info "Skipping Mac App Store apps (virtual machine detected)"
+fi
+
+echo
+log_success "All packages installed successfully! 🎉"
+end_timer
+
+{{ end -}}

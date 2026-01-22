@@ -1,0 +1,17 @@
+[tools]
+golang = "latest"
+bun = "latest"
+npm = "latest"
+node = "latest"
+prettier = "latest"
+pre-commit = "latest"
+python = "latest"
+uv = "latest"
+
+[settings]
+
+[settings.npm]
+package_manager = "bun"
+
+[settings.pipx]
+uvx = true

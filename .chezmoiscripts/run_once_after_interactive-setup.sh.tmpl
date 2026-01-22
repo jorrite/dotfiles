@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+show_banner
+
+log_info "This script will guide you through configuring various apps."
+log_info "Each app will open with specific instructions."
+echo
+
+# Function to open an app and give instructions
+open_with_instructions() {
+  local app_name="$1"
+  local emoji="$2"
+  local instructions="$3"
+
+  local has_app=false
+  [[ -n "$app_name" ]] && has_app=true
+
+  if $has_app; then
+    log_step "${emoji} ${app_name}"
+  else
+    log_step "${emoji} Instructions"
+  fi
+
+  echo -e "${YELLOW}Instructions:${RESET}"
+  echo "$instructions"
+  echo
+
+  if $has_app; then
+    echo -e "${BOLD}Press Enter to open ${app_name}...${RESET}"
+    read -r
+    open -a "$app_name"
+    echo -e "${BOLD}Press Enter after you've completed the configuration...${RESET}"
+  else
+    echo -e "${BOLD}Press Enter after you've completed the instructions...${RESET}"
+  fi
+  read -r
+
+  if $has_app; then
+    log_success "${app_name} configuration complete"
+  else
+    log_success "Instructions completed"
+  fi
+}
+
+# Check if running in VM
+if is_virtual_machine; then
+    SKIP_MAS_INSTALLED_APPS=true
+    log_info "Virtual machine detected - Mac App Store app instructions will be skipped"
+else
+    SKIP_MAS_INSTALLED_APPS=false
+fi
+
+# === DaisyDisk X ===
+open_with_instructions "DaisyDisk" "💾" \
+"Configure the license for DaisyDisk.
+
+License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
+
+# === Messages ===
+open_with_instructions "Messages" "💬" \
+"Configure Messages to sync with iCloud.
+
+➜ Go to Preferences
+➜ Enable iCloud sync"
+
+# === Music ===
+open_with_instructions "Music" "🎵" \
+"Sign in to Apple Music with your Apple ID."
+
+# === Safari ===
+open_with_instructions "Safari" "🧭" \
+"Configure Safari extensions.
+
+➜ Go to Safari → Settings → Extensions
+➜ Enable/configure your preferred extensions"
+
+# === Transmit ===
+open_with_instructions "Transmit" "🚀" \
+"Configure the license for Transmit.
+
+License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
+
+# === System Settings ===
+open_with_instructions "System Settings" "⚙️" \
+"I. Configure keyboard shortcuts:
+
+1. Open System Settings → Keyboard → Keyboard Shortcuts
+2. Spotlight:
+   ➜ Disable Spotlight search shortcuts
+3. Screenshots:
+   ➜ Configure your preferred screenshot shortcuts
+
+II. Hide Menubar Items."
+
+# === CleanShot X ===
+open_with_instructions "CleanShot X" "📸" \
+"CleanShot X requires system permissions:
+
+1. Grant Accessibility permissions when prompted
+2. Go to https://licenses.cleanshot.com to activate
+3. Configure keyboard shortcuts in preferences"
+
+# === Karabiner-Elements ===
+open_with_instructions "Karabiner-Elements" "⌨️" \
+"Karabiner-Elements requires system permissions:
+
+1. Grant Input Monitoring permission when prompted
+2. Grant Accessibility permission when prompted
+3. Configure your keyboard modifications"
+
+# === Control Centre ===
+open_with_instructions "" "⚙️" \
+"Configure Control Center to only keep these:
+
+1. WiFi
+2. Bluetooth
+3. Music
+4. Focus
+5. Dark Mode
+6. Sync View
+7. Screen brightness
+8. Sound"
+
+
+# === Raycast ===
+open_with_instructions "" "⌨️" \
+"Raycast will be configured via a backup file.
+Import Password: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/fise2kkom4wx6nolix4lta6mz4/password" }}"
+
+open ~/.config/raycast/config.rayconfig
+read -r
+
+if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
+    # === Things ===
+    open_with_instructions "Things3" "☑️" \
+    "Sign in to Things Cloud.
+
+➜ Go to Settings → Things Cloud
+➜ Sign in with your account"
+fi
+
+# === Aerospace ===
+open_with_instructions "AeroSpace" "📺" \
+"AeroSpace requires system permissions:
+
+1. Grant Accessibility permission when prompted"
+
+# === Alcove ===
+open_with_instructions "Alcove" "📺" \
+"Alcove requires system permissions and a license:
+
+1. Follow the wizard to add permissions
+2. License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/yirvfhgrrscv6cnq5tt2ia4vc4/licentiesleutel" }}"
+
+echo
+show_celebration
