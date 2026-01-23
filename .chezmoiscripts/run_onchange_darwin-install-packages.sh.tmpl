@@ -82,9 +82,6 @@ if [ "$SKIP_MAS" = false ]; then
     # Check if mas is available and signed in
     if ! command -v mas >/dev/null 2>&1; then
         log_warning "'mas' command not available, skipping App Store apps"
-    elif ! mas account >/dev/null 2>&1; then
-        log_warning "Not signed into Mac App Store, skipping App Store apps"
-        log_info "Sign into the App Store and run 'chezmoi apply' again to install these apps"
     else
         if retry_with_backoff 2 5 30 brew bundle --file=/dev/stdin <<EOF
 cask_args appdir: "/Applications"

@@ -53,7 +53,7 @@ else
     log_info "Press any key after installation completes..."
     read -n 1 -s -r < /dev/tty
     echo
-    
+
     if xcode-select -p >/dev/null 2>&1; then
         log_success "Xcode Command Line Tools installed successfully"
     else
@@ -68,7 +68,7 @@ if command -v brew >/dev/null 2>&1; then
     log_success "Homebrew is already installed"
 else
     log_info "Installing Homebrew..."
-    
+
     # Retry logic for Homebrew installation
     max_attempts=3
     attempt=1
@@ -87,7 +87,7 @@ else
         fi
         attempt=$((attempt + 1))
     done
-    
+
     # Configure Homebrew environment
     log_info "Configuring Homebrew environment..."
     if [ -f "$HOME/.zprofile" ]; then
@@ -105,9 +105,9 @@ else
             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
         ) >> "$HOME/.zprofile"
     fi
-    
+
     eval "$(/opt/homebrew/bin/brew shellenv)"
-    
+
     # Validate Homebrew installation
     if command -v brew >/dev/null 2>&1; then
         log_success "Homebrew configured and ready"
@@ -123,7 +123,7 @@ if command -v op >/dev/null 2>&1; then
     log_success "1Password and 1Password CLI already installed"
 else
     log_info "Installing 1Password and 1Password CLI..."
-    
+
     # Install with retry logic
     max_attempts=3
     attempt=1
@@ -192,6 +192,42 @@ else
     fi
 fi
 
+AGE_DIR="$HOME/.config/age"
+AGE_KEY_FILE="$AGE_DIR/key.txt"
+OP_ITEM="op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/key.txt"
+
+echo "🔐 Bootstrapping age key..."
+
+# Ensure op CLI exists
+if ! command -v op >/dev/null 2>&1; then
+  log_error "❌ 1Password CLI (op) not installed"
+  exit 1
+fi
+
+# Ensure signed in
+if ! op account list >/dev/null 2>&1; then
+  log_error "❌ Not signed into 1Password CLI"
+  echo "➡️  Run: op signin"
+  exit 1
+fi
+
+# Create directory
+mkdir -p "$AGE_DIR"
+chmod 700 "$AGE_DIR"
+
+# Do nothing if key already exists
+if [[ -f "$AGE_KEY_FILE" ]]; then
+  log_info "✔ age key already exists, skipping"
+  exit 0
+fi
+
+# Read secret from 1Password and write to file
+op read "$OP_ITEM" >"$AGE_KEY_FILE"
+
+chmod 600 "$AGE_KEY_FILE"
+
+log_success "✅ age key installed"
+
 log_info "Initializing Chezmoi from repository..."
 if chezmoi init jorrite; then
     log_success "Chezmoi initialized successfully"
@@ -206,4 +242,3 @@ if chezmoi apply; then
 else
     log_warning "Chezmoi apply had some issues, but continuing..."
 fi
-
