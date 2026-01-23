@@ -4,17 +4,38 @@
             "complex_modifications": {
                 "rules": [
                     {
-                        "description": "shift+caps_lock->caps_lock; caps_lock+[...keys] -> control+[..keys]; caps_lock -> escape",
+                        "description": "Caps as Hyper, but Control when used with Tab",
                         "manipulators": [
                             {
                                 "from": {
-                                    "key_code": "caps_lock",
+                                    "key_code": "tab",
                                     "modifiers": {
-                                        "mandatory": ["shift"],
-                                        "optional": ["caps_lock"]
+                                        "mandatory": ["caps_lock"],
+                                        "optional": ["shift"]
                                     }
                                 },
-                                "to": [{ "key_code": "caps_lock" }],
+                                "to": [
+                                    {
+                                        "key_code": "tab",
+                                        "modifiers": ["left_control"]
+                                    }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "tab",
+                                    "modifiers": {
+                                        "mandatory": ["caps_lock", "shift"],
+                                        "optional": []
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "tab",
+                                        "modifiers": ["left_control", "shift"]
+                                    }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -22,7 +43,12 @@
                                     "key_code": "caps_lock",
                                     "modifiers": { "optional": ["any"] }
                                 },
-                                "to": [{ "key_code": "left_control" }],
+                                "to": [
+                                    {
+                                        "key_code": "left_shift",
+                                        "modifiers": ["left_control", "left_option", "left_command"]
+                                    }
+                                ],
                                 "to_if_alone": [{ "key_code": "escape" }],
                                 "type": "basic"
                             }
