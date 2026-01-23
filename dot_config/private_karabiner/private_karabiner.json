@@ -8,11 +8,21 @@
                         "manipulators": [
                             {
                                 "from": {
-                                    "key_code": "tab",
-                                    "modifiers": {
-                                        "mandatory": ["caps_lock"],
-                                        "optional": ["shift"]
+                                    "key_code": "caps_lock",
+                                    "modifiers": { "optional": ["any"] }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "right_shift",
+                                        "modifiers": ["right_control", "right_option", "right_command"]
                                     }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "tab",
+                                    "modifiers": { "mandatory": ["right_shift", "right_control", "right_option", "right_command"] }
                                 },
                                 "to": [
                                     {
@@ -25,31 +35,14 @@
                             {
                                 "from": {
                                     "key_code": "tab",
-                                    "modifiers": {
-                                        "mandatory": ["caps_lock", "shift"],
-                                        "optional": []
-                                    }
+                                    "modifiers": { "mandatory": ["left_shift", "right_shift", "right_control", "right_option", "right_command"] }
                                 },
                                 "to": [
                                     {
                                         "key_code": "tab",
-                                        "modifiers": ["left_control", "shift"]
+                                        "modifiers": ["left_control", "left_shift"]
                                     }
                                 ],
-                                "type": "basic"
-                            },
-                            {
-                                "from": {
-                                    "key_code": "caps_lock",
-                                    "modifiers": { "optional": ["any"] }
-                                },
-                                "to": [
-                                    {
-                                        "key_code": "left_shift",
-                                        "modifiers": ["left_control", "left_option", "left_command"]
-                                    }
-                                ],
-                                "to_if_alone": [{ "key_code": "escape" }],
                                 "type": "basic"
                             }
                         ]
