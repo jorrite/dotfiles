@@ -13,6 +13,8 @@ packages:
       - git
       - gnupg
       - jq
+      - kubernetes-cli
+      - kubie
       - mas
       - mise
       - tree
@@ -68,8 +70,6 @@ packages:
     mas:
       - name: "Azure VPN Client"
         id: "1553936137"
-      - name: "Okta Verify"
-        id: "490179405"
       - name: "Windows App"
         id: "1295203466"
       - name: "Slack"
