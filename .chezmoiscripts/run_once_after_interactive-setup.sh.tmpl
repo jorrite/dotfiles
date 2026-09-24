@@ -63,9 +63,8 @@ fi
 
 # === DaisyDisk X ===
 open_with_instructions "DaisyDisk" "💾" \
-"Configure the license for DaisyDisk.
-
-License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
+"Configure the license for DaisyDisk." \
+"{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
 
 # === Messages ===
 open_with_instructions "Messages" "💬" \
@@ -87,9 +86,8 @@ open_with_instructions "Safari" "🧭" \
 
 # === Transmit ===
 open_with_instructions "Transmit" "🚀" \
-"Configure the license for Transmit.
-
-License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
+"Configure the license for Transmit." \
+"{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
 
 # === System Settings ===
 open_with_instructions "System Settings" "⚙️" \
@@ -130,8 +128,8 @@ open_with_instructions "" "⚙️" \
 
 # === Raycast ===
 open_with_instructions "" "⌨️" \
-"Raycast will be configured via a backup file.
-Import Password: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/fise2kkom4wx6nolix4lta6mz4/password" }}"
+"Raycast will be configured via a backup file." \
+"{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/fise2kkom4wx6nolix4lta6mz4/password" }}"
 
 open ~/.config/raycast/config.rayconfig
 read -r
@@ -156,7 +154,8 @@ open_with_instructions "Alcove" "📺" \
 "Alcove requires system permissions and a license:
 
 1. Follow the wizard to add permissions
-2. License: {{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/yirvfhgrrscv6cnq5tt2ia4vc4/licentiesleutel" }}"
+2. Paste the license (already copied to your clipboard) when prompted" \
+"{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/yirvfhgrrscv6cnq5tt2ia4vc4/licentiesleutel" }}"
 
 echo
 show_celebration
