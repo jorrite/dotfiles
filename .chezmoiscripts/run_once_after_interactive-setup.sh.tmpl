@@ -10,11 +10,14 @@ log_info "This script will guide you through configuring various apps."
 log_info "Each app will open with specific instructions."
 echo
 
-# Function to open an app and give instructions
+# Function to open an app and give instructions.
+# An optional 4th arg is copied to the clipboard (e.g. a license key)
+# instead of being printed to the terminal.
 open_with_instructions() {
   local app_name="$1"
   local emoji="$2"
   local instructions="$3"
+  local secret="$4"
 
   local has_app=false
   [[ -n "$app_name" ]] && has_app=true
