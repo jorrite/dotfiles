@@ -30,6 +30,10 @@ open_with_instructions() {
 
   echo -e "${YELLOW}Instructions:${RESET}"
   echo "$instructions"
+  if [[ -n "$secret" ]]; then
+    printf '%s' "$secret" | pbcopy
+    echo -e "${BOLD}Copied to clipboard — paste with ⌘ + V.${RESET}"
+  fi
   echo
 
   if $has_app; then
