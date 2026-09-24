@@ -64,6 +64,14 @@ log_success "Security settings configured"
 log_substep "⌨️  Configuring Keyboard & Input..."
 # Allow keyboard navigation on prompts/modals
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+
+# Disable Spotlight search shortcuts (cmd-space, cmd-alt-space)
+HOTKEYS_PLIST="$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
+for hotkey_id in 64 65; do
+    /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:${hotkey_id}:enabled false" "$HOTKEYS_PLIST" 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:${hotkey_id}:enabled bool false" "$HOTKEYS_PLIST" 2>/dev/null \
+        || log_warning "Could not disable Spotlight hotkey ${hotkey_id}"
+done
 log_success "Keyboard settings configured"
 
 log_substep "🔄 Configuring Software Update..."
