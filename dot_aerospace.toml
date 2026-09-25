@@ -20,16 +20,19 @@ start-at-login = false
 # See: https://nikitabobko.github.io/AeroSpace/guide#on-window-detected-callback
 on-window-detected = [
     # Chat -> workspace 1
-    { if = 'test %{app-bundle-id} = com.apple.MobileSMS || test %{app-bundle-id} = com.tinyspeck.slackmacgap || test %{app-bundle-id} = com.microsoft.teams2 || test %{app-bundle-id} = com.microsoft.teams || test %{app-bundle-id} = net.whatsapp.WhatsApp', run = 'move-node-to-workspace 1' },
+    { if = 'test %{app-bundle-id} = com.apple.MobileSMS || test %{app-bundle-id} = com.tinyspeck.slackmacgap || test %{app-bundle-id} = com.microsoft.teams2 || test %{app-bundle-id} = com.microsoft.teams || test %{app-bundle-id} = net.whatsapp.WhatsApp || test %{app-bundle-id} = com.apple.mail || test %{app-bundle-id} = com.microsoft.Outlook', run = 'move-node-to-workspace 1' },
     # Browsers -> workspace 2
     { if = 'test %{app-bundle-id} = com.apple.Safari || test %{app-bundle-id} = com.google.Chrome', run = 'move-node-to-workspace 2' },
     # Warp -> workspace 3
     { if = 'test %{app-bundle-id} = dev.warp.Warp-Stable', run = 'move-node-to-workspace 3' },
     # Zed -> workspace 4
     { if = 'test %{app-bundle-id} = dev.zed.Zed', run = 'move-node-to-workspace 4' },
-    # Everything else lands wherever it opens (workspace 5 by convention)
-    # Finder: exclude from tiling entirely, it doesn't behave well tiled
+    # Finder: exclude from tiling entirely, it doesn't behave well tiled.
+    # Must come before the catch-all below so Finder doesn't also get
+    # moved to workspace 5.
     { if.app-id = 'com.apple.finder', run = 'layout floating' },
+    # Catch-all: everything else -> workspace 5
+    { if = 'true', run = 'move-node-to-workspace 5' },
 ]
 
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
