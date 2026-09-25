@@ -48,7 +48,7 @@
                         ]
                     },
                     {
-                        "description": "Hyper key shell command shortcuts",
+                        "description": "Hyper key shortcuts",
                         "manipulators": [
                             {
                                 "from": {
@@ -70,6 +70,32 @@
                                 "to": [
                                     {
                                         "shell_command": "if [ \"$(osascript -e 'tell application \"Amphetamine\" to session is active')\" = \"true\" ]; then osascript -e 'tell application \"Amphetamine\" to end session'; killall Amphetamine; else osascript -e 'tell application \"Amphetamine\" to start new session'; fi"
+                                    }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "right_arrow",
+                                    "modifiers": { "mandatory": ["right_shift", "right_control", "right_option", "right_command"] }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "grave_accent_and_tilde",
+                                        "modifiers": ["left_command"]
+                                    }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "left_arrow",
+                                    "modifiers": { "mandatory": ["right_shift", "right_control", "right_option", "right_command"] }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "grave_accent_and_tilde",
+                                        "modifiers": ["left_command", "left_shift"]
                                     }
                                 ],
                                 "type": "basic"
