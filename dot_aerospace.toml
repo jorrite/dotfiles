@@ -9,8 +9,28 @@ config-version = 2
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = []
 
-# Start AeroSpace at login
-start-at-login = true
+# Deliberately false: AeroSpace is only meant to run during a work/coding
+# Focus. A Shortcuts Focus automation launches/quits it instead (that
+# automation binding itself is device-specific and doesn't sync via
+# iCloud, so it has to be set up by hand on each machine).
+start-at-login = false
+
+# Automatically route specific apps to specific workspaces when they open,
+# and keep Finder out of the tiling layout entirely (it tiles badly).
+# See: https://nikitabobko.github.io/AeroSpace/guide#on-window-detected-callback
+on-window-detected = [
+    # Chat -> workspace 1
+    { if = 'test %{app-bundle-id} = com.apple.MobileSMS || test %{app-bundle-id} = com.tinyspeck.slackmacgap || test %{app-bundle-id} = com.microsoft.teams2 || test %{app-bundle-id} = com.microsoft.teams || test %{app-bundle-id} = net.whatsapp.WhatsApp', run = 'move-node-to-workspace 1' },
+    # Browsers -> workspace 2
+    { if = 'test %{app-bundle-id} = com.apple.Safari || test %{app-bundle-id} = com.google.Chrome', run = 'move-node-to-workspace 2' },
+    # Warp -> workspace 3
+    { if = 'test %{app-bundle-id} = dev.warp.Warp-Stable', run = 'move-node-to-workspace 3' },
+    # Zed -> workspace 4
+    { if = 'test %{app-bundle-id} = dev.zed.Zed', run = 'move-node-to-workspace 4' },
+    # Everything else lands wherever it opens (workspace 5 by convention)
+    # Finder: exclude from tiling entirely, it doesn't behave well tiled
+    { if.app-id = 'com.apple.finder', run = 'layout floating' },
+]
 
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
 enable-normalization-flatten-containers = true
