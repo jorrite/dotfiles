@@ -17,6 +17,7 @@ packages:
       - kubie
       - mas
       - mise
+      - nono
       - tree
       - yq
     casks:

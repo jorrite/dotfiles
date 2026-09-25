@@ -16,6 +16,7 @@ mise_tools:
     terraform-docs: "latest"
     checkov: "latest"
     golangci-lint: "v2.11.4"
+    herdr: "latest"
   work:
     awscli:
       version: "latest"

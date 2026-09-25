@@ -156,6 +156,18 @@ open_with_instructions "Rectangle" "🪟" \
 
 1. Grant Accessibility permission when prompted"
 
+# === Claude Code sandboxing (nono + herdr) ===
+open_with_instructions "" "🤖" \
+"One-time setup for running Claude Code sandboxed via nono, inside herdr:
+
+1. Start herdr: run 'herdr' in a terminal
+2. Inside a herdr pane, run:
+   nono run --profile claude-code --allow-launch-services -- claude
+3. Complete the OAuth login flow in the browser window that opens
+   (--allow-launch-services is required on macOS for this)
+4. nono will prompt to install the nolabs-ai/claude pack on first run
+   if it isn't already installed -- press Y to accept"
+
 # === Alcove ===
 open_with_instructions "Alcove" "📺" \
 "Alcove requires system permissions and a license:
