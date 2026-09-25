@@ -227,7 +227,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace fullscreen"
+                                        "shell_command": "if pgrep -x AeroSpace >/dev/null; then aerospace fullscreen; else open -g 'rectangle://execute-action?name=maximize'; fi"
                                     }
                                 ],
                                 "type": "basic"

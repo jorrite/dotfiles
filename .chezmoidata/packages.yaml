@@ -36,6 +36,7 @@ packages:
       - karabiner-elements
       - keka
       - raycast
+      - rectangle
       - warp
       - transmit
       - zed
