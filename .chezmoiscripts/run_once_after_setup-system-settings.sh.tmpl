@@ -72,6 +72,21 @@ for hotkey_id in 64 65; do
         || /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:${hotkey_id}:enabled bool false" "$HOTKEYS_PLIST" 2>/dev/null \
         || log_warning "Could not disable Spotlight hotkey ${hotkey_id}"
 done
+
+# Force "Move focus to next window in application" back to its default
+# (Cmd-`), regardless of any prior manual customization, so the Karabiner
+# Hyper+arrow bindings (which emit Cmd-`/Cmd-Shift-`) reliably work.
+/usr/libexec/PlistBuddy -c "Delete :AppleSymbolicHotKeys:27" "$HOTKEYS_PLIST" 2>/dev/null
+if /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:enabled bool true" "$HOTKEYS_PLIST" 2>/dev/null \
+    && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:type string standard" "$HOTKEYS_PLIST" 2>/dev/null \
+    && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:parameters array" "$HOTKEYS_PLIST" 2>/dev/null \
+    && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:parameters:0 integer 96" "$HOTKEYS_PLIST" 2>/dev/null \
+    && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:parameters:1 integer 50" "$HOTKEYS_PLIST" 2>/dev/null \
+    && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:parameters:2 integer 1048576" "$HOTKEYS_PLIST" 2>/dev/null; then
+    :
+else
+    log_warning "Could not reset 'move focus to next window' hotkey"
+fi
 log_success "Keyboard settings configured"
 
 log_substep "🔄 Configuring Software Update..."
