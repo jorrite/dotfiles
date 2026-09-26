@@ -26,6 +26,7 @@ packages:
       - affinity
       - alcove
       - betterdisplay
+      - claude-code
       - cleanshot
       - daisydisk
       - docker-desktop
@@ -63,7 +64,8 @@ packages:
         id: "497799835"
   work:
     taps: []
-    brews: []
+    brews:
+      - azure-cli
     casks:
       - google-chrome
       - microsoft-teams
