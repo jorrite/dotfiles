@@ -9,7 +9,7 @@ config-version = 2
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = []
 
-# False: launched/quit by a per-machine Focus automation instead (see CLAUDE.md).
+# False: launched/quit by a per-machine Focus automation instead.
 start-at-login = false
 
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
@@ -19,7 +19,7 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 # See: https://nikitabobko.github.io/AeroSpace/guide#layouts
 # The 'accordion-padding' specifies the size of accordion padding
 # You can set 0 to disable the padding feature
-accordion-padding = 30
+accordion-padding = 8
 
 # Possible values: tiles|accordion
 default-root-container-layout = 'tiles'
@@ -52,8 +52,8 @@ persistent-workspaces = ["1", "2", "3", "4", "5"]
 # See: https://nikitabobko.github.io/AeroSpace/commands#mode
 on-mode-changed = []
 
-# Route apps to workspaces on open; one block per app-id (see CLAUDE.md).
-# Plain keys must stay above this array-of-tables section (see CLAUDE.md).
+# Route apps to workspaces on open; one block per app-id, no OR-logic.
+# Plain keys must stay above this array-of-tables section (TOML gotcha).
 
 # Chat -> workspace 1
 [[on-window-detected]]
@@ -101,13 +101,17 @@ on-mode-changed = []
     if.app-id = 'com.apple.finder'
     run = 'layout floating'
 
-# 1Password's Touch ID prompt: float, don't tile (see CLAUDE.md).
+# 1Password: only the main window tiles; everything else floats.
+# Order matters: first match wins.
 [[on-window-detected]]
     if.app-id = 'com.1password.1password'
-    if.window-title-regex-substring = '^1Password$'
+    if.window-title-regex-substring = ' — 1Password'
+    run = 'move-node-to-workspace 5'
+[[on-window-detected]]
+    if.app-id = 'com.1password.1password'
     run = 'layout floating'
 
-# Catch-all: everything else -> workspace 5. Must be last (see CLAUDE.md).
+# Catch-all: everything else -> workspace 5. Must be last.
 [[on-window-detected]]
     run = 'move-node-to-workspace 5'
 
@@ -137,5 +141,5 @@ on-mode-changed = []
     outer.top =        8
     outer.right =      8
 
-# Intentionally empty: bindings live in Karabiner instead (see CLAUDE.md).
+# Intentionally empty: bindings live in Karabiner instead.
 [mode.main.binding]
