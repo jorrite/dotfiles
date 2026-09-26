@@ -8,6 +8,32 @@ set -e
 
 start_timer
 
+{{ $universalTools := keys .mise_tools.universal -}}
+{{ $typeTools := keys (index .mise_tools .computer.type) -}}
+{{ $allTools := concat $universalTools $typeTools | mustUniq -}}
+
+# Fail if a declared tool already exists somewhere mise doesn't own -- e.g.
+# installed via Homebrew, a manual download, or some other package manager.
+# mise would otherwise install its own copy alongside it, and whichever one
+# PATH resolves first silently wins with no warning.
+log_substep "Checking for conflicting installs..."
+MISE_SHIMS_DIR="$HOME/.local/share/mise/shims"
+CONFLICT_FOUND=false
+{{ range $allTools -}}
+if [ ! -e "$MISE_SHIMS_DIR/{{ . }}" ]; then
+    existing_path="$(command -v {{ . | quote }} 2>/dev/null || true)"
+    if [ -n "$existing_path" ]; then
+        log_error "'{{ . }}' is declared for mise but already exists at $existing_path (not a mise shim)."
+        log_error "Uninstall or remove it from wherever it came from, then re-run 'chezmoi apply'."
+        CONFLICT_FOUND=true
+    fi
+fi
+{{ end -}}
+if [ "$CONFLICT_FOUND" = true ]; then
+    exit 1
+fi
+log_success "No conflicting installs found"
+
 log_substep "🔪 Installing dev tools via Mise..."
 mise install
 
