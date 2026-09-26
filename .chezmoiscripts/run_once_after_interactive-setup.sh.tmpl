@@ -149,12 +149,30 @@ open_with_instructions "Rectangle" "🪟" \
 1. Grant Accessibility permission when prompted"
 
 # === Claude Code sandboxing (nono + herdr) ===
+# The profile actually passed to `nono run` is a small, machine-local file
+# that just extends the chezmoi-managed claude-code-base profile -- kept
+# out of the repo so anything nono itself ever persists onto the active
+# profile (accepted working directories, promoted approval drafts, etc.)
+# never touches version control. Created here idempotently rather than as
+# a chezmoi-templated file so re-running this script (or a future
+# 'chezmoi apply') can't clobber any local accretion.
+NONO_CHILD_PROFILE="$HOME/.config/nono/profiles/claude-code.json"
+if [ ! -f "$NONO_CHILD_PROFILE" ]; then
+    mkdir -p "$(dirname "$NONO_CHILD_PROFILE")"
+    echo '{ "extends": "claude-code-base" }' > "$NONO_CHILD_PROFILE"
+    log_success "Created machine-local nono profile at $NONO_CHILD_PROFILE"
+fi
+
 open_with_instructions "" "🤖" \
 "One-time setup for running Claude Code sandboxed via nono, inside herdr:
 
 1. Start herdr: run 'herdr' in a terminal
 2. Inside a herdr pane, run:
-   nono run --profile claude-code --allow-launch-services -- claude
+   nono run --profile claude-code --allow-launch-services --allow-cwd -- claude
+   (--allow-cwd grants the working directory without an interactive
+   per-directory prompt every time you start nono from a new project --
+   the level it grants is whatever the profile already specifies, so
+   this is a convenience flag, not an extra permission)
 3. Complete the OAuth login flow in the browser window that opens
    (--allow-launch-services is required on macOS for this)
 4. nono will prompt to install the nolabs-ai/claude pack on first run
