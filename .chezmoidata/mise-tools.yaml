@@ -1,0 +1,24 @@
+mise_tools:
+  universal:
+    golang: "latest"
+    bun: "latest"
+    npm: "latest"
+    node: "latest"
+    prettier: "latest"
+    pre-commit: "latest"
+    python: "latest"
+    uv: "latest"
+    just: "latest"
+    atmos: "latest"
+    gh: "latest"
+    terraform: "latest"
+    tflint: "latest"
+    terraform-docs: "latest"
+    checkov: "latest"
+    golangci-lint: "v2.11.4"
+  work:
+    awscli:
+      version: "latest"
+      symlink_bins: "true"
+    dotnet: "latest"
+  personal: {}

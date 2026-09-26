@@ -1,0 +1,23 @@
+[tools]
+{{- range $name, $spec := .mise_tools.universal }}
+{{- if kindIs "map" $spec }}
+{{ $name }} = { version = {{ $spec.version | quote }}{{ if hasKey $spec "symlink_bins" }}, symlink_bins = {{ $spec.symlink_bins | quote }}{{ end }} }
+{{- else }}
+{{ $name }} = {{ $spec | quote }}
+{{- end }}
+{{- end }}
+{{- range $name, $spec := (index .mise_tools .computer.type) }}
+{{- if kindIs "map" $spec }}
+{{ $name }} = { version = {{ $spec.version | quote }}{{ if hasKey $spec "symlink_bins" }}, symlink_bins = {{ $spec.symlink_bins | quote }}{{ end }} }
+{{- else }}
+{{ $name }} = {{ $spec | quote }}
+{{- end }}
+{{- end }}
+
+[settings]
+
+[settings.npm]
+package_manager = "bun"
+
+[settings.pipx]
+uvx = true
