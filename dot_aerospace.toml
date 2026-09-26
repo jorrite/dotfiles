@@ -15,26 +15,6 @@ after-startup-command = []
 # iCloud, so it has to be set up by hand on each machine).
 start-at-login = false
 
-# Automatically route specific apps to specific workspaces when they open,
-# and keep Finder out of the tiling layout entirely (it tiles badly).
-# See: https://nikitabobko.github.io/AeroSpace/guide#on-window-detected-callback
-on-window-detected = [
-    # Chat -> workspace 1
-    { if = 'test %{app-bundle-id} = com.apple.MobileSMS || test %{app-bundle-id} = com.tinyspeck.slackmacgap || test %{app-bundle-id} = com.microsoft.teams2 || test %{app-bundle-id} = com.microsoft.teams || test %{app-bundle-id} = net.whatsapp.WhatsApp || test %{app-bundle-id} = com.apple.mail || test %{app-bundle-id} = com.microsoft.Outlook', run = 'move-node-to-workspace 1' },
-    # Browsers -> workspace 2
-    { if = 'test %{app-bundle-id} = com.apple.Safari || test %{app-bundle-id} = com.google.Chrome', run = 'move-node-to-workspace 2' },
-    # Warp -> workspace 3
-    { if = 'test %{app-bundle-id} = dev.warp.Warp-Stable', run = 'move-node-to-workspace 3' },
-    # Zed -> workspace 4
-    { if = 'test %{app-bundle-id} = dev.zed.Zed', run = 'move-node-to-workspace 4' },
-    # Finder: exclude from tiling entirely, it doesn't behave well tiled.
-    # Must come before the catch-all below so Finder doesn't also get
-    # moved to workspace 5.
-    { if.app-id = 'com.apple.finder', run = 'layout floating' },
-    # Catch-all: everything else -> workspace 5
-    { if = 'true', run = 'move-node-to-workspace 5' },
-]
-
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
@@ -74,6 +54,81 @@ persistent-workspaces = ["1", "2", "3", "4", "5"]
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
 # See: https://nikitabobko.github.io/AeroSpace/commands#mode
 on-mode-changed = []
+
+# Automatically route specific apps to specific workspaces when they open,
+# and keep Finder out of the tiling layout entirely (it tiles badly).
+# See: https://nikitabobko.github.io/AeroSpace/guide#on-window-detected-callback
+#
+# One [[on-window-detected]] block per app: v0.20.2-Beta (the installed
+# version) only supports a single 'if.app-id' predicate per block, no
+# OR-logic across bundle IDs the way a shell-style 'if' string would allow.
+# Verified against docs/guide.adoc pinned to git tag v0.20.2-Beta -- the
+# 'main' branch docs describe a newer/unreleased 'if = "test ..."' syntax
+# that this installed version doesn't understand.
+#
+# All plain top-level keys above must come before this array-of-tables
+# section: once a [[on-window-detected]] header appears, TOML treats any
+# bare 'key = value' line after it as belonging to that array element,
+# not to the top-level table, right up until the next [table] or
+# [[array-of-tables]] header. Verified live with Python's tomllib -- an
+# earlier draft that put this section before the plain keys silently
+# absorbed all of them into the last (catch-all) entry.
+
+# Chat -> workspace 1
+[[on-window-detected]]
+    if.app-id = 'com.apple.MobileSMS'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'com.tinyspeck.slackmacgap'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'com.microsoft.teams2'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'com.microsoft.teams'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'net.whatsapp.WhatsApp'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'com.apple.mail'
+    run = 'move-node-to-workspace 1'
+[[on-window-detected]]
+    if.app-id = 'com.microsoft.Outlook'
+    run = 'move-node-to-workspace 1'
+
+# Browsers -> workspace 2
+[[on-window-detected]]
+    if.app-id = 'com.apple.Safari'
+    run = 'move-node-to-workspace 2'
+[[on-window-detected]]
+    if.app-id = 'com.google.Chrome'
+    run = 'move-node-to-workspace 2'
+
+# Warp -> workspace 3
+[[on-window-detected]]
+    if.app-id = 'dev.warp.Warp-Stable'
+    run = 'move-node-to-workspace 3'
+
+# Zed -> workspace 4
+[[on-window-detected]]
+    if.app-id = 'dev.zed.Zed'
+    run = 'move-node-to-workspace 4'
+
+# Finder: exclude from tiling entirely, it doesn't behave well tiled.
+# Must come before the catch-all below so Finder doesn't also get
+# moved to workspace 5.
+[[on-window-detected]]
+    if.app-id = 'com.apple.finder'
+    run = 'layout floating'
+
+# Catch-all: everything else -> workspace 5. No 'if' key at all -- that's
+# how v0.20.2-Beta spells an unconditional match. Must be the LAST
+# [[on-window-detected]] entry in the file (nothing else may follow it
+# except another [table]/[[array-of-tables]] header -- see note above).
+
+[[on-window-detected]]
+    run = 'move-node-to-workspace 5'
 
 # Possible values: (qwerty|dvorak|colemak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
