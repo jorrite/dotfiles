@@ -9,10 +9,7 @@ config-version = 2
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = []
 
-# Deliberately false: AeroSpace is only meant to run during a work/coding
-# Focus. A Shortcuts Focus automation launches/quits it instead (that
-# automation binding itself is device-specific and doesn't sync via
-# iCloud, so it has to be set up by hand on each machine).
+# False: launched/quit by a per-machine Focus automation instead (see CLAUDE.md).
 start-at-login = false
 
 # Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
@@ -55,24 +52,8 @@ persistent-workspaces = ["1", "2", "3", "4", "5"]
 # See: https://nikitabobko.github.io/AeroSpace/commands#mode
 on-mode-changed = []
 
-# Automatically route specific apps to specific workspaces when they open,
-# and keep Finder out of the tiling layout entirely (it tiles badly).
-# See: https://nikitabobko.github.io/AeroSpace/guide#on-window-detected-callback
-#
-# One [[on-window-detected]] block per app: v0.20.2-Beta (the installed
-# version) only supports a single 'if.app-id' predicate per block, no
-# OR-logic across bundle IDs the way a shell-style 'if' string would allow.
-# Verified against docs/guide.adoc pinned to git tag v0.20.2-Beta -- the
-# 'main' branch docs describe a newer/unreleased 'if = "test ..."' syntax
-# that this installed version doesn't understand.
-#
-# All plain top-level keys above must come before this array-of-tables
-# section: once a [[on-window-detected]] header appears, TOML treats any
-# bare 'key = value' line after it as belonging to that array element,
-# not to the top-level table, right up until the next [table] or
-# [[array-of-tables]] header. Verified live with Python's tomllib -- an
-# earlier draft that put this section before the plain keys silently
-# absorbed all of them into the last (catch-all) entry.
+# Route apps to workspaces on open; one block per app-id (see CLAUDE.md).
+# Plain keys must stay above this array-of-tables section (see CLAUDE.md).
 
 # Chat -> workspace 1
 [[on-window-detected]]
@@ -115,18 +96,18 @@ on-mode-changed = []
     if.app-id = 'dev.zed.Zed'
     run = 'move-node-to-workspace 4'
 
-# Finder: exclude from tiling entirely, it doesn't behave well tiled.
-# Must come before the catch-all below so Finder doesn't also get
-# moved to workspace 5.
+# Finder: float, don't tile (must precede the catch-all below).
 [[on-window-detected]]
     if.app-id = 'com.apple.finder'
     run = 'layout floating'
 
-# Catch-all: everything else -> workspace 5. No 'if' key at all -- that's
-# how v0.20.2-Beta spells an unconditional match. Must be the LAST
-# [[on-window-detected]] entry in the file (nothing else may follow it
-# except another [table]/[[array-of-tables]] header -- see note above).
+# 1Password's Touch ID prompt: float, don't tile (see CLAUDE.md).
+[[on-window-detected]]
+    if.app-id = 'com.1password.1password'
+    if.window-title-regex-substring = '^1Password$'
+    run = 'layout floating'
 
+# Catch-all: everything else -> workspace 5. Must be last (see CLAUDE.md).
 [[on-window-detected]]
     run = 'move-node-to-workspace 5'
 
@@ -135,10 +116,7 @@ on-mode-changed = []
 [key-mapping]
     preset = 'qwerty'
 
-# Workspaces 4 and 5 shift to a second monitor when one is connected
-# (same workspaces, same app assignments -- just spread across both
-# screens instead of everything living on one).
-# See: https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
+# Workspaces 4 and 5 shift to a secondary monitor when one is connected.
 [workspace-to-monitor-force-assignment]
     4 = 'secondary'
     5 = 'secondary'
@@ -159,18 +137,5 @@ on-mode-changed = []
     outer.top =        8
     outer.right =      8
 
-# 'main' binding mode declaration
-# See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
-# 'main' binding mode must be always presented
-# Fallback value (if you omit the key): mode.main.binding = {}
-#
-# Intentionally empty: workspace switching, moving windows to a workspace,
-# and toggling fullscreen are all driven by Karabiner's Hyper key bindings
-# invoking the 'aerospace' CLI directly (workspace/move-node-to-workspace/
-# fullscreen), not by AeroSpace's own keybinding layer. That's necessary
-# rather than a style choice: Hyper already carries a shift modifier as
-# part of its own signature, so a plain "Hyper" press and a "Hyper+extra
-# shift" press are indistinguishable to anything that only reads modifier
-# flags (as AeroSpace's binding matcher does) -- only Karabiner, which
-# inspects raw key codes, can actually tell those two apart.
+# Intentionally empty: bindings live in Karabiner instead (see CLAUDE.md).
 [mode.main.binding]
