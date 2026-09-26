@@ -126,14 +126,6 @@ open_with_instructions "" "⚙️" \
 5. Screen brightness"
 
 
-# === Raycast ===
-open_with_instructions "" "⌨️" \
-"Raycast will be configured via a backup file." \
-"{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/fise2kkom4wx6nolix4lta6mz4/password" }}"
-
-open ~/.config/raycast/config.rayconfig
-read -r
-
 if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
     # === Things ===
     open_with_instructions "Things3" "☑️" \
