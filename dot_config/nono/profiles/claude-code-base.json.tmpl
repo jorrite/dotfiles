@@ -10,16 +10,13 @@
   },
 
   "command_policies": {
-    // Required whenever an invocation_policy uses "approve".
-    "approval_backends": {
-      "terminal": { "type": "terminal" }
-    },
-    "approval_defaults": {
-      "backend": "terminal"
-    },
     "commands": {
-      // default: allow; approve only the commands that touch the
-      // 1Password socket below.
+      // No "approve" rules here: nono's only working approval backend
+      // (terminal) can't prompt from inside another TUI's raw-mode
+      // terminal, so every decision below is a hard allow or deny instead.
+      // Local/reversible git ops (including commit -- 1Password's own
+      // Touch ID prompt already gates the signing key) are allowed; only
+      // push and destructive local ops are denied.
       "git": {
         "from": {
           "session": {
@@ -30,20 +27,21 @@
             },
             "invocation_policy": {
               "default": "allow",
-              "approve": [
-                { "argv": { "prefix": ["commit"] }, "reason": "signs with 1Password" },
-                { "argv": { "prefix": ["push"] }, "reason": "authenticates with 1Password" },
-                { "argv": { "prefix": ["fetch"] }, "reason": "authenticates with 1Password" },
-                { "argv": { "prefix": ["clone"] }, "reason": "authenticates with 1Password" },
-                { "argv": { "prefix": ["pull"] }, "reason": "authenticates with 1Password" }
+              "deny": [
+                { "argv": { "prefix": ["push"] }, "reason": "publishes to a remote -- run this yourself" },
+                { "argv": { "prefix": ["clean"] }, "reason": "irreversibly deletes untracked files" },
+                { "argv": { "contains": ["--hard"] }, "reason": "irreversibly discards local changes" },
+                { "argv": { "contains": ["-D"] }, "reason": "force-deletes a branch" },
+                { "argv": { "prefix": ["filter-branch"] }, "reason": "rewrites history" }
               ]
             }
           }
         }
       },
 
-      // Same default-allow shape for gh; approve only actual writes.
-      // network.allow_all: gh's upload/CDN hosts aren't worth enumerating.
+      // Same shape for gh: reads/queries allowed by default, anything
+      // that visibly changes something on GitHub is denied outright --
+      // run those yourself when you actually want to publish/act.
       "gh": {
         "from": {
           "session": {
@@ -53,7 +51,7 @@
             },
             "invocation_policy": {
               "default": "allow",
-              "approve": [
+              "deny": [
                 { "argv": { "prefix": ["pr", "create"] }, "reason": "opens a PR" },
                 { "argv": { "prefix": ["pr", "merge"] }, "reason": "merges a PR" },
                 { "argv": { "prefix": ["pr", "close"] }, "reason": "closes a PR" },
