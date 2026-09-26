@@ -107,7 +107,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace workspace 1"
+                                        "shell_command": "/opt/homebrew/bin/aerospace workspace 1"
                                     }
                                 ],
                                 "type": "basic"
@@ -119,7 +119,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace workspace 2"
+                                        "shell_command": "/opt/homebrew/bin/aerospace workspace 2"
                                     }
                                 ],
                                 "type": "basic"
@@ -131,7 +131,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace workspace 3"
+                                        "shell_command": "/opt/homebrew/bin/aerospace workspace 3"
                                     }
                                 ],
                                 "type": "basic"
@@ -143,7 +143,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace workspace 4"
+                                        "shell_command": "/opt/homebrew/bin/aerospace workspace 4"
                                     }
                                 ],
                                 "type": "basic"
@@ -155,7 +155,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace workspace 5"
+                                        "shell_command": "/opt/homebrew/bin/aerospace workspace 5"
                                     }
                                 ],
                                 "type": "basic"
@@ -167,7 +167,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace move-node-to-workspace 1"
+                                        "shell_command": "/opt/homebrew/bin/aerospace move-node-to-workspace 1"
                                     }
                                 ],
                                 "type": "basic"
@@ -179,7 +179,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace move-node-to-workspace 2"
+                                        "shell_command": "/opt/homebrew/bin/aerospace move-node-to-workspace 2"
                                     }
                                 ],
                                 "type": "basic"
@@ -191,7 +191,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace move-node-to-workspace 3"
+                                        "shell_command": "/opt/homebrew/bin/aerospace move-node-to-workspace 3"
                                     }
                                 ],
                                 "type": "basic"
@@ -203,7 +203,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace move-node-to-workspace 4"
+                                        "shell_command": "/opt/homebrew/bin/aerospace move-node-to-workspace 4"
                                     }
                                 ],
                                 "type": "basic"
@@ -215,7 +215,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "aerospace move-node-to-workspace 5"
+                                        "shell_command": "/opt/homebrew/bin/aerospace move-node-to-workspace 5"
                                     }
                                 ],
                                 "type": "basic"
@@ -227,7 +227,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "if pgrep -x AeroSpace >/dev/null; then aerospace fullscreen; else open -g 'rectangle://execute-action?name=maximize'; fi"
+                                        "shell_command": "if pgrep -x AeroSpace >/dev/null; then /opt/homebrew/bin/aerospace fullscreen; else open -g 'rectangle://execute-action?name=maximize'; fi"
                                     }
                                 ],
                                 "type": "basic"

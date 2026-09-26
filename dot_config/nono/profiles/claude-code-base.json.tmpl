@@ -1,0 +1,94 @@
+{
+  // Shared harness for running Claude Code under nono: mise-toolchain read
+  // access plus gated git/gh command policies. This is the chezmoi-managed
+  // half of the profile split -- see dot_config/nono/README (or the
+  // interactive-setup script) for why. In short: the profile actually
+  // passed to `nono run --profile` is a small, machine-local,
+  // NOT-chezmoi-managed file (~/.config/nono/profiles/claude-code.json)
+  // that just does `{ "extends": "claude-code-base" }`. nono itself may
+  // want to persist things onto whatever profile is active -- accepting a
+  // new working directory, promoting an approved decision, etc. -- and its
+  // own docs are explicit that "promote" refuses to touch a pack-installed
+  // profile and drafts a derived one instead. Pointing the live profile at
+  // an untracked child keeps any such local accretion off of this
+  // chezmoi-tracked file entirely, so `chezmoi apply` on another machine
+  // (or after `chezmoi diff` here) never has to reconcile against
+  // nono-written state.
+  //
+  // Schema verified against the actually-installed `nono` binary via
+  // `nono profile schema` / `nono profile guide` / `nono profile validate`,
+  // not the web docs -- the web docs describe a different (older/newer)
+  // shape than what's installed here (e.g. no top-level "credentials"
+  // field, no "intercept"/"match"/"action" array).
+  "extends": "nolabs-ai/claude",
+  "meta": {
+    "name": "claude-code-base",
+    "description": "Shared harness for Claude Code: mise toolchains, gated git/gh"
+  },
+  "filesystem": {
+    "read": ["$HOME/.local/share/mise"]
+  },
+
+  "command_policies": {
+    // Required by the schema the moment any invocation_policy uses
+    // "approve" -- there's no implicit default backend.
+    "approval_backends": {
+      "terminal": { "type": "terminal" }
+    },
+    "approval_defaults": {
+      "backend": "terminal"
+    },
+    "commands": {
+      // Every git invocation requires interactive approval, full stop --
+      // no read-only allowlist. An earlier per-subcommand design (status/
+      // log/diff allowed outright, only commit/push/etc. gated) produced
+      // enough incidental git traffic (e.g. Claude Code's own internal
+      // 'git remote get-url origin' probes) that approvals piled up
+      // in a way that looked like a hang rather than a gate. Approve-
+      // everything is simpler to reason about and is what was asked for.
+      //
+      // The socket grant is 1Password's actual SSH agent socket (see
+      // dot_config/1password/symlink_agent.sock.tmpl). Not $SSH_AUTH_SOCK
+      // -- on this machine that env var points at macOS's own generic
+      // launchd agent, not 1Password's; 1Password is wired up via
+      // ~/.ssh/config's IdentityAgent directive instead.
+      "git": {
+        "from": {
+          "session": {
+            "sandbox": {
+              "fs_read": ["."],
+              "fs_write": ["."],
+              "unix_socket_bind": ["{{ .chezmoi.homeDir }}/.config/1password/agent.sock"]
+            },
+            "invocation_policy": {
+              "default": "approve"
+            }
+          }
+        }
+      },
+
+      // Same blanket-approval shape for gh. Network is intentionally
+      // wide open (allow_all) rather than an api.github.com/github.com/
+      // *.githubusercontent.com allowlist: gh's own upload/attachment
+      // flows reach into other GitHub-owned CDN hosts that aren't worth
+      // enumerating, and the thing actually being gated is *whether this
+      // invocation runs at all* (via invocation_policy), not which host
+      // it's allowed to reach once it does. Uses the same personal
+      // `gh auth login` session as normal, deliberately not a separate
+      // scoped token: the gate is on the action, not the credential.
+      "gh": {
+        "from": {
+          "session": {
+            "sandbox": {
+              "fs_read": [".", "$HOME/.config/gh"],
+              "network": { "allow_all": true }
+            },
+            "invocation_policy": {
+              "default": "approve"
+            }
+          }
+        }
+      }
+    }
+  }
+}
