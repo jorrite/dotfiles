@@ -24,4 +24,5 @@ mise_tools:
       version: "latest"
       symlink_bins: "true"
     dotnet: "latest"
-  personal: {}
+  personal:
+    xcodegen: "latest"

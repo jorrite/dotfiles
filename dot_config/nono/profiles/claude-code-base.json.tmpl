@@ -1,25 +1,5 @@
 {
-  // Shared harness for running Claude Code under nono: mise-toolchain read
-  // access plus gated git/gh command policies. This is the chezmoi-managed
-  // half of the profile split -- see dot_config/nono/README (or the
-  // interactive-setup script) for why. In short: the profile actually
-  // passed to `nono run --profile` is a small, machine-local,
-  // NOT-chezmoi-managed file (~/.config/nono/profiles/claude-code.json)
-  // that just does `{ "extends": "claude-code-base" }`. nono itself may
-  // want to persist things onto whatever profile is active -- accepting a
-  // new working directory, promoting an approved decision, etc. -- and its
-  // own docs are explicit that "promote" refuses to touch a pack-installed
-  // profile and drafts a derived one instead. Pointing the live profile at
-  // an untracked child keeps any such local accretion off of this
-  // chezmoi-tracked file entirely, so `chezmoi apply` on another machine
-  // (or after `chezmoi diff` here) never has to reconcile against
-  // nono-written state.
-  //
-  // Schema verified against the actually-installed `nono` binary via
-  // `nono profile schema` / `nono profile guide` / `nono profile validate`,
-  // not the web docs -- the web docs describe a different (older/newer)
-  // shape than what's installed here (e.g. no top-level "credentials"
-  // field, no "intercept"/"match"/"action" array).
+  // Shared harness for Claude Code under nono: mise toolchains, gated git/gh.
   "extends": "nolabs-ai/claude",
   "meta": {
     "name": "claude-code-base",
@@ -30,8 +10,7 @@
   },
 
   "command_policies": {
-    // Required by the schema the moment any invocation_policy uses
-    // "approve" -- there's no implicit default backend.
+    // Required whenever an invocation_policy uses "approve".
     "approval_backends": {
       "terminal": { "type": "terminal" }
     },
@@ -39,26 +18,8 @@
       "backend": "terminal"
     },
     "commands": {
-      // default: "allow" -- everything runs without prompting except the
-      // specific subcommands listed under "approve" below. This is the
-      // inverse of an earlier version of this file (default: "approve",
-      // with a large allowlist of read-only subcommands to keep things
-      // usable): Claude Code's own git integration fires off several
-      // read-only introspection calls per turn on its own (status, log,
-      // config, remote get-url, ls-files, ...), completely independent of
-      // anything the agent is actually asked to do, and gating every one
-      // of those behind a prompt produced a pile of simultaneous approval
-      // requests that looked like a hang. Flipping the default avoids
-      // maintaining that allowlist at all: only the handful of commands
-      // that touch the 1Password socket require approval, everything else
-      // -- including any git subcommand not explicitly listed -- just
-      // runs.
-      //
-      // The socket grant is 1Password's actual SSH agent socket (see
-      // dot_config/1password/symlink_agent.sock.tmpl). Not $SSH_AUTH_SOCK
-      // -- on this machine that env var points at macOS's own generic
-      // launchd agent, not 1Password's; 1Password is wired up via
-      // ~/.ssh/config's IdentityAgent directive instead.
+      // default: allow; approve only the commands that touch the
+      // 1Password socket below.
       "git": {
         "from": {
           "session": {
@@ -81,19 +42,8 @@
         }
       },
 
-      // Same default-allow shape for gh, with approval required for the
-      // subcommands that visibly change something on GitHub (as opposed
-      // to reads/queries like 'pr view', 'issue list', 'repo view', etc.,
-      // which fall through to the default and just run). Network is
-      // intentionally wide open (allow_all) rather than an
-      // api.github.com/github.com/*.githubusercontent.com allowlist: gh's
-      // own upload/attachment flows reach into other GitHub-owned CDN
-      // hosts that aren't worth enumerating, and the thing actually being
-      // gated is *whether this invocation runs at all* (via
-      // invocation_policy), not which host it's allowed to reach once it
-      // does. Uses the same personal `gh auth login` session as normal,
-      // deliberately not a separate scoped token: the gate is on the
-      // action, not the credential.
+      // Same default-allow shape for gh; approve only actual writes.
+      // network.allow_all: gh's upload/CDN hosts aren't worth enumerating.
       "gh": {
         "from": {
           "session": {
