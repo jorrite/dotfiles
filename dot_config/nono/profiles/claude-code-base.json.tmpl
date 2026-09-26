@@ -39,13 +39,20 @@
       "backend": "terminal"
     },
     "commands": {
-      // Every git invocation requires interactive approval, full stop --
-      // no read-only allowlist. An earlier per-subcommand design (status/
-      // log/diff allowed outright, only commit/push/etc. gated) produced
-      // enough incidental git traffic (e.g. Claude Code's own internal
-      // 'git remote get-url origin' probes) that approvals piled up
-      // in a way that looked like a hang rather than a gate. Approve-
-      // everything is simpler to reason about and is what was asked for.
+      // default: "allow" -- everything runs without prompting except the
+      // specific subcommands listed under "approve" below. This is the
+      // inverse of an earlier version of this file (default: "approve",
+      // with a large allowlist of read-only subcommands to keep things
+      // usable): Claude Code's own git integration fires off several
+      // read-only introspection calls per turn on its own (status, log,
+      // config, remote get-url, ls-files, ...), completely independent of
+      // anything the agent is actually asked to do, and gating every one
+      // of those behind a prompt produced a pile of simultaneous approval
+      // requests that looked like a hang. Flipping the default avoids
+      // maintaining that allowlist at all: only the handful of commands
+      // that touch the 1Password socket require approval, everything else
+      // -- including any git subcommand not explicitly listed -- just
+      // runs.
       //
       // The socket grant is 1Password's actual SSH agent socket (see
       // dot_config/1password/symlink_agent.sock.tmpl). Not $SSH_AUTH_SOCK
@@ -61,21 +68,32 @@
               "unix_socket_bind": ["{{ .chezmoi.homeDir }}/.config/1password/agent.sock"]
             },
             "invocation_policy": {
-              "default": "approve"
+              "default": "allow",
+              "approve": [
+                { "argv": { "prefix": ["commit"] }, "reason": "signs with 1Password" },
+                { "argv": { "prefix": ["push"] }, "reason": "authenticates with 1Password" },
+                { "argv": { "prefix": ["fetch"] }, "reason": "authenticates with 1Password" },
+                { "argv": { "prefix": ["clone"] }, "reason": "authenticates with 1Password" },
+                { "argv": { "prefix": ["pull"] }, "reason": "authenticates with 1Password" }
+              ]
             }
           }
         }
       },
 
-      // Same blanket-approval shape for gh. Network is intentionally
-      // wide open (allow_all) rather than an api.github.com/github.com/
-      // *.githubusercontent.com allowlist: gh's own upload/attachment
-      // flows reach into other GitHub-owned CDN hosts that aren't worth
-      // enumerating, and the thing actually being gated is *whether this
-      // invocation runs at all* (via invocation_policy), not which host
-      // it's allowed to reach once it does. Uses the same personal
-      // `gh auth login` session as normal, deliberately not a separate
-      // scoped token: the gate is on the action, not the credential.
+      // Same default-allow shape for gh, with approval required for the
+      // subcommands that visibly change something on GitHub (as opposed
+      // to reads/queries like 'pr view', 'issue list', 'repo view', etc.,
+      // which fall through to the default and just run). Network is
+      // intentionally wide open (allow_all) rather than an
+      // api.github.com/github.com/*.githubusercontent.com allowlist: gh's
+      // own upload/attachment flows reach into other GitHub-owned CDN
+      // hosts that aren't worth enumerating, and the thing actually being
+      // gated is *whether this invocation runs at all* (via
+      // invocation_policy), not which host it's allowed to reach once it
+      // does. Uses the same personal `gh auth login` session as normal,
+      // deliberately not a separate scoped token: the gate is on the
+      // action, not the credential.
       "gh": {
         "from": {
           "session": {
@@ -84,7 +102,40 @@
               "network": { "allow_all": true }
             },
             "invocation_policy": {
-              "default": "approve"
+              "default": "allow",
+              "approve": [
+                { "argv": { "prefix": ["pr", "create"] }, "reason": "opens a PR" },
+                { "argv": { "prefix": ["pr", "merge"] }, "reason": "merges a PR" },
+                { "argv": { "prefix": ["pr", "close"] }, "reason": "closes a PR" },
+                { "argv": { "prefix": ["pr", "reopen"] }, "reason": "reopens a PR" },
+                { "argv": { "prefix": ["pr", "edit"] }, "reason": "edits a PR" },
+                { "argv": { "prefix": ["pr", "review"] }, "reason": "posts a review" },
+                { "argv": { "prefix": ["issue", "create"] }, "reason": "opens an issue" },
+                { "argv": { "prefix": ["issue", "close"] }, "reason": "closes an issue" },
+                { "argv": { "prefix": ["issue", "reopen"] }, "reason": "reopens an issue" },
+                { "argv": { "prefix": ["issue", "comment"] }, "reason": "posts a comment" },
+                { "argv": { "prefix": ["issue", "edit"] }, "reason": "edits an issue" },
+                { "argv": { "prefix": ["release", "create"] }, "reason": "publishes a release" },
+                { "argv": { "prefix": ["release", "delete"] }, "reason": "deletes a release" },
+                { "argv": { "prefix": ["release", "edit"] }, "reason": "edits a release" },
+                { "argv": { "prefix": ["repo", "create"] }, "reason": "creates a repo" },
+                { "argv": { "prefix": ["repo", "delete"] }, "reason": "deletes a repo" },
+                { "argv": { "prefix": ["repo", "edit"] }, "reason": "edits repo settings" },
+                { "argv": { "prefix": ["gist", "create"] }, "reason": "creates a gist" },
+                { "argv": { "prefix": ["gist", "delete"] }, "reason": "deletes a gist" },
+                { "argv": { "prefix": ["gist", "edit"] }, "reason": "edits a gist" },
+                { "argv": { "prefix": ["label", "create"] }, "reason": "creates a label" },
+                { "argv": { "prefix": ["label", "delete"] }, "reason": "deletes a label" },
+                { "argv": { "prefix": ["label", "edit"] }, "reason": "edits a label" },
+                { "argv": { "prefix": ["workflow", "run"] }, "reason": "triggers a workflow" },
+                { "argv": { "prefix": ["workflow", "enable"] }, "reason": "enables a workflow" },
+                { "argv": { "prefix": ["workflow", "disable"] }, "reason": "disables a workflow" },
+                { "argv": { "prefix": ["secret"] }, "reason": "manages repo/org secrets" },
+                { "argv": { "prefix": ["variable"] }, "reason": "manages repo/org variables" },
+                { "argv": { "prefix": ["auth", "login"] }, "reason": "changes the authenticated account" },
+                { "argv": { "prefix": ["auth", "logout"] }, "reason": "changes the authenticated account" },
+                { "argv": { "prefix": ["api"] }, "reason": "safety depends on -X method flag, not reliably matchable" }
+              ]
             }
           }
         }
