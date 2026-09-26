@@ -87,6 +87,17 @@ if /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:enabled bool true" "
 else
     log_warning "Could not reset 'move focus to next window' hotkey"
 fi
+
+# PlistBuddy edits the plist file directly, bypassing cfprefsd -- which owns
+# this domain's in-memory cache and has no idea the file changed. Without
+# killing it here, cfprefsd can flush its still-stale in-memory copy back
+# over our on-disk edit at some later, unpredictable point (a subsequent
+# 'defaults write' elsewhere, a cache eviction, etc.), silently reverting
+# the hotkey back to whatever it was before. Confirmed live: the hotkey
+# read back correctly via 'defaults export' right after this script ran,
+# but the *actual* shortcut in System Settings had drifted back to
+# Cmd-Escape -- restarting cfprefsd is what makes the on-disk write stick.
+killall cfprefsd 2>/dev/null || true
 log_success "Keyboard settings configured"
 
 log_substep "🔄 Configuring Software Update..."
