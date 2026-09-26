@@ -1,0 +1,14 @@
+{
+  // Extends nono's official Claude Code profile (nolabs-ai/claude pack)
+  // with read access to mise-managed toolchains, so language servers and
+  // compilers Claude Code spawns can actually find them via PATH.
+  // See: https://nono.sh/docs/cli/clients/claude.md
+  "extends": "nolabs-ai/claude",
+  "meta": {
+    "name": "claude-code",
+    "description": "Claude Code with read access to mise toolchains"
+  },
+  "filesystem": {
+    "read": ["$HOME/.local/share/mise"]
+  }
+}

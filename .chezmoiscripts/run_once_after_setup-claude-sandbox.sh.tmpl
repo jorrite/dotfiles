@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+log_step "🛡️  Claude Code Sandbox Configuration"
+
+# Claude Code's own settings.json is not chezmoi-managed as a whole file --
+# it's actively rewritten by Claude Code itself (enabledPlugins, etc.), so a
+# static template would fight those writes. Merge in just the one setting
+# we care about instead, same surgical-mutation approach used for macOS
+# defaults/symbolichotkeys elsewhere in this repo.
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+mkdir -p "$HOME/.claude"
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+    TMP_FILE="$(mktemp)"
+    if jq '.sandbox.enabled = true | .sandbox.allowUnsandboxedCommands = false' "$CLAUDE_SETTINGS" > "$TMP_FILE"; then
+        mv "$TMP_FILE" "$CLAUDE_SETTINGS"
+        log_success "Claude Code sandbox hardened (allowUnsandboxedCommands disabled)"
+    else
+        rm -f "$TMP_FILE"
+        log_warning "Could not update Claude Code settings (invalid existing JSON?)"
+    fi
+else
+    echo '{"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}}' | jq '.' > "$CLAUDE_SETTINGS"
+    log_success "Claude Code sandbox settings created"
+fi

@@ -1,0 +1,12 @@
+# herdr configuration
+# Full set of available options: `herdr --default-config`
+#
+# Left mostly at defaults intentionally. Add keybindings here as plugins
+# get installed (`herdr plugin install owner/repo`) -- installed plugins
+# are tracked globally by herdr itself, not in this file, but binding a
+# key to a plugin action goes here, e.g.:
+#
+# [[keys.command]]
+# key = "prefix+l"
+# type = "plugin_action"
+# command = "example.layout.apply"
