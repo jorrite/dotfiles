@@ -17,6 +17,8 @@ mise_tools:
     checkov: "latest"
     golangci-lint: "v2.11.4"
     herdr: "latest"
+    age: "latest"
+    yq: "latest"
   work:
     awscli:
       version: "latest"

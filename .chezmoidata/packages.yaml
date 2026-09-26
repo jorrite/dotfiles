@@ -5,7 +5,6 @@ packages:
       - oven-sh/bun
       - nikitabobko/tap
     brews:
-      - age
       - chezmoi
       - defaultbrowser
       - dockutil
@@ -13,13 +12,10 @@ packages:
       - git
       - gnupg
       - jq
-      - kubernetes-cli
-      - kubie
       - mas
       - mise
       - nono
       - tree
-      - yq
     casks:
       - 1password
       - 1password-cli
