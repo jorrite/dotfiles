@@ -73,7 +73,7 @@ else
     max_attempts=3
     attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+        if install_script="$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && [ -n "$install_script" ] && /bin/bash -c "$install_script"; then
             log_success "Homebrew installed successfully"
             break
         else
