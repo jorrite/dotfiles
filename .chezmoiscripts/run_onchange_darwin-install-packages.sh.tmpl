@@ -46,6 +46,28 @@ echo "  🍺 Casks:   {{ len $casks }}"
 echo "  🍎 MAS:     {{ len $masApps }}"
 echo
 
+# Step 0: Fail if a declared formula already exists somewhere Homebrew
+# doesn't own -- e.g. installed via mise, a manual download, or some other
+# package manager. Homebrew would otherwise install its own copy alongside
+# it, and whichever one PATH resolves first silently wins with no warning.
+log_substep "Checking for conflicting installs..."
+BREW_PREFIX_BIN="$(brew --prefix)/bin"
+CONFLICT_FOUND=false
+{{ range $brews -}}
+if ! brew list --formula 2>/dev/null | grep -qx {{ . | quote }}; then
+    existing_path="$(command -v {{ . | quote }} 2>/dev/null || true)"
+    if [ -n "$existing_path" ] && [ "$(dirname "$existing_path")" != "$BREW_PREFIX_BIN" ]; then
+        log_error "'{{ . }}' is declared for Homebrew but already exists at $existing_path (not Homebrew's bin)."
+        log_error "Uninstall or remove it from wherever it came from, then re-run 'chezmoi apply'."
+        CONFLICT_FOUND=true
+    fi
+fi
+{{ end -}}
+if [ "$CONFLICT_FOUND" = true ]; then
+    exit 1
+fi
+log_success "No conflicting installs found"
+
 # Step 1: Tap repositories
 log_substep "Adding Homebrew taps..."
 {{ range $taps -}}
