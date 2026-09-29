@@ -19,6 +19,7 @@ mise_tools:
     herdr: "latest"
     age: "latest"
     yq: "latest"
+    claude-code: "latest"
   work:
     awscli:
       version: "latest"

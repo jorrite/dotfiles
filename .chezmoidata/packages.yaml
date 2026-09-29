@@ -23,7 +23,6 @@ packages:
       - affinity
       - alcove
       - betterdisplay
-      - claude-code
       - cleanshot
       - daisydisk
       - docker-desktop
