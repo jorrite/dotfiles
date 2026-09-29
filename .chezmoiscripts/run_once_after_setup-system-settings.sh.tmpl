@@ -40,30 +40,30 @@ osascript -e 'tell application "System Settings" to quit' 2>/dev/null || true
 
 log_substep "🖥️  Configuring Menu Bar..."
 # Hide sound in menubar
-defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 8
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Sound" -int 8 || log_warning "Could not hide Sound from menu bar"
 # Hide bluetooth in menubar
-defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 8
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "Bluetooth" -int 8 || log_warning "Could not hide Bluetooth from menu bar"
 # Hide spotlight
-defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "WiFi" -int 8
+defaults write $HOME/Library/Preferences/ByHost/com.apple.controlcenter.plist "WiFi" -int 8 || log_warning "Could not hide WiFi from menu bar"
 # Hide spotlight
-defaults -currentHost write com.apple.Spotlight MenuItemHidden -int 1
+defaults -currentHost write com.apple.Spotlight MenuItemHidden -int 1 || log_warning "Could not hide Spotlight from menu bar"
 
 # Clock settings
-defaults write com.apple.menuextra.clock "Show24Hour" -bool "true"
-defaults write com.apple.menuextra.clock "ShowDate" -bool "true"
-defaults write com.apple.menuextra.clock "ShowDayOfWeek" -bool "true"
-defaults write com.apple.menuextra.clock "ShowSeconds" -bool "true"
+defaults write com.apple.menuextra.clock "Show24Hour" -bool "true" || log_warning "Could not set 24-hour clock"
+defaults write com.apple.menuextra.clock "ShowDate" -bool "true" || log_warning "Could not enable clock date"
+defaults write com.apple.menuextra.clock "ShowDayOfWeek" -bool "true" || log_warning "Could not enable clock day of week"
+defaults write com.apple.menuextra.clock "ShowSeconds" -bool "true" || log_warning "Could not enable clock seconds"
 log_success "Menu bar configured"
 
 log_substep "🔒 Configuring Security & Privacy..."
 # Require password immediately after sleep or screen saver begins
-defaults write com.apple.screensaver askForPassword -int 1
-defaults write com.apple.screensaver askForPasswordDelay -int 0
+defaults write com.apple.screensaver askForPassword -int 1 || log_warning "Could not enable ask-for-password on wake"
+defaults write com.apple.screensaver askForPasswordDelay -int 0 || log_warning "Could not set ask-for-password delay"
 log_success "Security settings configured"
 
 log_substep "⌨️  Configuring Keyboard & Input..."
 # Allow keyboard navigation on prompts/modals
-defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 3 || log_warning "Could not enable full keyboard access"
 
 # Disable Spotlight search shortcuts (cmd-space, cmd-alt-space)
 HOTKEYS_PLIST="$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
@@ -102,34 +102,34 @@ log_success "Keyboard settings configured"
 
 log_substep "🔄 Configuring Software Update..."
 # Check for software updates daily
-defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1 || log_warning "Could not set software update frequency"
 log_success "Software update configured"
 
 log_substep "📁 Configuring Finder..."
 # Use column view in Finder
-defaults write com.apple.finder FXPreferredViewStyle -string "clmv"
-defaults write com.apple.finder FXPreferredGroupBy -string "Date Last Opened"
+defaults write com.apple.finder FXPreferredViewStyle -string "clmv" || log_warning "Could not set Finder view style"
+defaults write com.apple.finder FXPreferredGroupBy -string "Date Last Opened" || log_warning "Could not set Finder group-by"
 
 # Empty Trash securely by default
-defaults write com.apple.finder EmptyTrashSecurely -bool true
+defaults write com.apple.finder EmptyTrashSecurely -bool true || log_warning "Could not enable secure empty trash"
 log_success "Finder configured"
 
 log_substep "📦 Configuring Dock..."
 # Disable recent applications in Dock
-defaults write com.apple.dock "show-recents" -bool false
+defaults write com.apple.dock "show-recents" -bool false || log_warning "Could not disable Dock recent applications"
 log_success "Dock configured"
 
 log_substep "💾 Configuring System Dialogs..."
 # Expand save panel by default
-defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
-defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true || log_warning "Could not expand save panel"
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true || log_warning "Could not expand save panel (2)"
 
 # Expand print panel by default
-defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
-defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true || log_warning "Could not expand print panel"
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true || log_warning "Could not expand print panel (2)"
 
 # Automatically quit printer app once the print jobs complete
-defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
+defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true || log_warning "Could not enable auto-quit printer app"
 log_success "System dialogs configured"
 
 log_substep "🧭 Configuring Safari..."
@@ -168,7 +168,7 @@ else
     echo "  [o] Open System Settings → Privacy & Security → Full Disk Access"
     echo "  [s] Skip Safari configuration"
     echo
-    read -r -p "Choose (o/s): " choice
+    read -r -p "Choose (o/s): " choice || choice="s"
 
     case "$choice" in
         o|O)
@@ -189,9 +189,9 @@ log_substep "🔧 Configuring Dock applications..."
 # Configure Dock
 log_substep "🧭 Configuring Default browser..."
 if is_virtual_machine; then
-    defaultbrowser safari
+    defaultbrowser safari || log_warning "Could not set Safari as default browser"
 else
-    defaultbrowser velja
+    defaultbrowser velja || log_warning "Could not set Velja as default browser"
 fi
 
 if ! command -v dockutil >/dev/null 2>&1; then

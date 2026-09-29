@@ -166,17 +166,18 @@ fi
 open_with_instructions "" "🤖" \
 "One-time setup for running Claude Code sandboxed via nono, inside herdr:
 
-1. Start herdr: run 'herdr' in a terminal
-2. Inside a herdr pane, run:
+1. Install the Claude Code nono pack (one-time; nono no longer prompts
+   for this automatically on first run, so it must be pulled up front):
+   nono pull nolabs-ai/claude
+2. Start herdr: run 'herdr' in a terminal
+3. Inside a herdr pane, run:
    nono run --profile claude-code --allow-launch-services --allow-cwd -- claude
    (--allow-cwd grants the working directory without an interactive
    per-directory prompt every time you start nono from a new project --
    the level it grants is whatever the profile already specifies, so
    this is a convenience flag, not an extra permission)
-3. Complete the OAuth login flow in the browser window that opens
-   (--allow-launch-services is required on macOS for this)
-4. nono will prompt to install the nolabs-ai/claude pack on first run
-   if it isn't already installed -- press Y to accept"
+4. Complete the OAuth login flow in the browser window that opens
+   (--allow-launch-services is required on macOS for this)"
 
 # === Alcove ===
 open_with_instructions "Alcove" "📺" \
