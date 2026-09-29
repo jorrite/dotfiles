@@ -76,7 +76,7 @@ done
 # Force "Move focus to next window in application" back to its default
 # (Cmd-`), regardless of any prior manual customization, so the Karabiner
 # Hyper+arrow bindings (which emit Cmd-`/Cmd-Shift-`) reliably work.
-/usr/libexec/PlistBuddy -c "Delete :AppleSymbolicHotKeys:27" "$HOTKEYS_PLIST" 2>/dev/null
+/usr/libexec/PlistBuddy -c "Delete :AppleSymbolicHotKeys:27" "$HOTKEYS_PLIST" 2>/dev/null || true
 if /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:enabled bool true" "$HOTKEYS_PLIST" 2>/dev/null \
     && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:type string standard" "$HOTKEYS_PLIST" 2>/dev/null \
     && /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:27:value:parameters array" "$HOTKEYS_PLIST" 2>/dev/null \
