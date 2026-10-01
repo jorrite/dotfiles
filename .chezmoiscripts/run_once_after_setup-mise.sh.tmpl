@@ -3,7 +3,6 @@
 
 set -e
 
-# Source helper library
 {{ include ".chezmoitemplates/lib.sh" }}
 
 start_timer
@@ -12,7 +11,7 @@ start_timer
 {{ $typeTools := keys (index .mise_tools .computer.type) -}}
 {{ $allTools := concat $universalTools $typeTools | mustUniq -}}
 
-# Fail if a declared tool already exists somewhere mise doesn't own -- e.g.
+# Fails if a declared tool already exists somewhere mise doesn't own -- e.g.
 # installed via Homebrew, a manual download, or some other package manager.
 # mise would otherwise install its own copy alongside it, and whichever one
 # PATH resolves first silently wins with no warning.

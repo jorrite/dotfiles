@@ -2,9 +2,6 @@
 
 set -e
 
-# Bootstrap script for new machines
-
-# Color definitions
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -13,7 +10,6 @@ readonly CYAN='\033[0;36m'
 readonly BOLD='\033[1m'
 readonly RESET='\033[0m'
 
-# Inline helper functions
 log_info() { echo -e "${BLUE}ℹ️  ${RESET}$*"; }
 log_success() { echo -e "${GREEN}✅ ${RESET}$*"; }
 log_warning() { echo -e "${YELLOW}⚠️  ${RESET}$*"; }
@@ -21,7 +17,6 @@ log_error() { echo -e "${RED}❌ ${RESET}$*" >&2; }
 log_step() { echo -e "\n${BOLD}${CYAN}═══ $* ═══${RESET}\n"; }
 show_progress() { echo -e "${BOLD}[$1/$2]${RESET} 🔧 $3"; }
 
-# Display welcome banner
 echo -e "${CYAN}${BOLD}"
 cat << 'EOF'
 ╔═══════════════════════════════════════════════════════════╗
@@ -34,7 +29,6 @@ cat << 'EOF'
 EOF
 echo -e "${RESET}\n"
 
-# Check network connectivity
 log_info "Checking prerequisites..."
 if ! ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
     log_error "No network connectivity detected. Please connect to the internet and try again."
@@ -42,7 +36,6 @@ if ! ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
 fi
 log_success "Network connectivity confirmed"
 
-# Step 1: Install Xcode Command Line Tools
 show_progress 1 4 "Installing Xcode Command Line Tools"
 if xcode-select -p >/dev/null 2>&1; then
     log_success "Xcode Command Line Tools already installed"
@@ -62,14 +55,12 @@ else
     fi
 fi
 
-# Step 2: Install Homebrew
 show_progress 2 4 "Installing Homebrew"
 if command -v brew >/dev/null 2>&1; then
     log_success "Homebrew is already installed"
 else
     log_info "Installing Homebrew..."
 
-    # Retry logic for Homebrew installation
     max_attempts=3
     attempt=1
     while [ $attempt -le $max_attempts ]; do
@@ -88,7 +79,6 @@ else
         attempt=$((attempt + 1))
     done
 
-    # Configure Homebrew environment
     log_info "Configuring Homebrew environment..."
     if [ -f "$HOME/.zprofile" ]; then
         if ! grep -q '/opt/homebrew/bin/brew shellenv' "$HOME/.zprofile"; then
@@ -108,7 +98,6 @@ else
 
     eval "$(/opt/homebrew/bin/brew shellenv)"
 
-    # Validate Homebrew installation
     if command -v brew >/dev/null 2>&1; then
         log_success "Homebrew configured and ready"
     else
@@ -117,14 +106,12 @@ else
     fi
 fi
 
-# Step 3: Install 1Password
 show_progress 3 4 "Installing 1Password and CLI"
 if command -v op >/dev/null 2>&1; then
     log_success "1Password and 1Password CLI already installed"
 else
     log_info "Installing 1Password and 1Password CLI..."
 
-    # Install with retry logic
     max_attempts=3
     attempt=1
     while [ $attempt -le $max_attempts ]; do
@@ -156,7 +143,6 @@ log_info "Press any key after completing these steps..."
 read -n 1 -s -r < /dev/tty
 echo
 
-# Verify 1Password CLI
 log_info "Verifying 1Password CLI integration..."
 max_attempts=3
 attempt=1
@@ -178,7 +164,6 @@ while [ $attempt -le $max_attempts ]; do
     attempt=$((attempt + 1))
 done
 
-# Step 4: Install and initialize Chezmoi
 show_progress 4 4 "Installing and initializing Chezmoi"
 if command -v chezmoi >/dev/null 2>&1; then
     log_success "Chezmoi already installed"
@@ -198,30 +183,25 @@ OP_ITEM="op://afcfz2u36qbb4w5iikx4aol2z4/ab73kbvbmhh5xnyn75p7oquloy/key.txt"
 
 echo "🔐 Bootstrapping age key..."
 
-# Ensure op CLI exists
 if ! command -v op >/dev/null 2>&1; then
   log_error "❌ 1Password CLI (op) not installed"
   exit 1
 fi
 
-# Ensure signed in
 if ! op account list >/dev/null 2>&1; then
   log_error "❌ Not signed into 1Password CLI"
   echo "➡️  Run: op signin"
   exit 1
 fi
 
-# Create directory
 mkdir -p "$AGE_DIR"
 chmod 700 "$AGE_DIR"
 
-# Do nothing if key already exists
 if [[ -f "$AGE_KEY_FILE" ]]; then
   log_info "✔ age key already exists, skipping"
   exit 0
 fi
 
-# Read secret from 1Password and write to file
 op read "$OP_ITEM" >"$AGE_KEY_FILE"
 
 chmod 600 "$AGE_KEY_FILE"

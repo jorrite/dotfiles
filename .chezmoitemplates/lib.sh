@@ -1,7 +1,4 @@
 #!/bin/bash
-# Chezmoi helper library for common functions
-
-# Color definitions
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -11,7 +8,6 @@ readonly CYAN='\033[0;36m'
 readonly BOLD='\033[1m'
 readonly RESET='\033[0m'
 
-# Logging functions
 log_info() {
     echo -e "${BLUE}ℹ️  ${RESET}$*"
 }
@@ -36,7 +32,6 @@ log_substep() {
     echo -e "${MAGENTA}  ➜ ${RESET}$*"
 }
 
-# Progress indicator
 show_progress() {
     local current=$1
     local total=$2
@@ -44,7 +39,6 @@ show_progress() {
     echo -e "${BOLD}[${current}/${total}]${RESET} 🔧 ${task}"
 }
 
-# Banner display
 show_banner() {
     echo -e "${CYAN}${BOLD}"
     cat << 'EOF'
@@ -59,7 +53,6 @@ EOF
     echo -e "${RESET}\n"
 }
 
-# Celebration banner
 show_celebration() {
     echo -e "\n${GREEN}${BOLD}"
     cat << 'EOF'
@@ -74,7 +67,6 @@ EOF
     echo -e "${RESET}\n"
 }
 
-# Retry logic with exponential backoff
 retry_with_backoff() {
     local max_attempts="${1}"
     local delay="${2}"
@@ -110,12 +102,10 @@ retry_with_backoff() {
     return $exit_code
 }
 
-# Check if running in a virtual machine
 is_virtual_machine() {
     sysctl -n machdep.cpu.brand_string | grep -qi "Virtual"
 }
 
-# Timer functions
 start_timer() {
     TIMER_START=$(date +%s)
 }

@@ -1,15 +1,5 @@
-# herdr configuration
-# Full set of available options: `herdr --default-config`
-#
-# Left mostly at defaults intentionally. Add keybindings here as plugins
-# get installed (`herdr plugin install owner/repo`) -- installed plugins
-# are tracked globally by herdr itself, not in this file, but binding a
-# key to a plugin action goes here, e.g.:
-#
-# [[keys.command]]
-# key = "prefix+l"
-# type = "plugin_action"
-# command = "example.layout.apply"
+# Left mostly at defaults intentionally; keybindings below are added only
+# as plugins get installed.
 
 # Suppresses the first-run onboarding wizard permanently -- without this,
 # a plain chezmoi-managed config.toml gets reset to a version lacking
