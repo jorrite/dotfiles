@@ -6,17 +6,17 @@ set -e
 {{ $privatePackages := (joinPath .chezmoi.sourceDir "/.chezmoitemplates/packages.age" | include | decrypt  | fromYaml).packages  }}
 {{ $publicPackages := .packages }}
 
-# Triggers to trigger on specific changes
+# chezmoi only reruns a run_onchange_ script when its rendered content
+# changes; this line has no other purpose than forcing a rerun whenever the
+# OS build changes.
 # 1. MacOS build version: {{ output "sw_vers" "--buildVersion" }}
 
-# Source helper library
 {{ include ".chezmoitemplates/lib.sh" }}
 
 start_timer
 
 log_step "📦 Package Installation"
 
-# Validate prerequisites
 log_substep "Validating prerequisites..."
 if ! command -v brew >/dev/null 2>&1; then
     log_error "Homebrew is not installed. Please run the startup script first."
@@ -24,7 +24,6 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 log_success "Homebrew is available"
 
-# Check if running in VM
 if is_virtual_machine; then
     SKIP_MAS=true
     log_info "Virtual machine detected - Mac App Store installations will be skipped"
@@ -32,7 +31,6 @@ else
     SKIP_MAS=false
 fi
 
-# Count packages for progress display
 {{ $taps := concat $publicPackages.universal.taps $privatePackages.universal.taps (get $publicPackages .computer.type).taps (get $privatePackages .computer.type).taps | mustUniq -}}
 {{ $brews := concat $publicPackages.universal.brews $privatePackages.universal.brews (get $publicPackages .computer.type).brews (get $privatePackages .computer.type).brews | mustUniq -}}
 {{ $casks := concat $publicPackages.universal.casks $privatePackages.universal.casks (get $publicPackages .computer.type).casks (get $privatePackages .computer.type).casks | mustUniq -}}
@@ -46,10 +44,10 @@ echo "  🍺 Casks:   {{ len $casks }}"
 echo "  🍎 MAS:     {{ len $masApps }}"
 echo
 
-# Step 0: Fail if a declared formula already exists somewhere Homebrew
-# doesn't own -- e.g. installed via mise, a manual download, or some other
-# package manager. Homebrew would otherwise install its own copy alongside
-# it, and whichever one PATH resolves first silently wins with no warning.
+# Fails if a declared formula already exists somewhere Homebrew doesn't
+# own -- e.g. installed via mise, a manual download, or some other package
+# manager. Homebrew would otherwise install its own copy alongside it, and
+# whichever one PATH resolves first silently wins with no warning.
 log_substep "Checking for conflicting installs..."
 BREW_PREFIX_BIN="$(brew --prefix)/bin"
 CONFLICT_FOUND=false
@@ -68,14 +66,12 @@ if [ "$CONFLICT_FOUND" = true ]; then
 fi
 log_success "No conflicting installs found"
 
-# Step 1: Tap repositories
 log_substep "Adding Homebrew taps..."
 {{ range $taps -}}
 brew tap {{ . | quote | replace " " "\", \"" }}
 {{ end -}}
 log_success "Taps added"
 
-# Step 2: Install formulae and casks
 log_substep "Installing Homebrew packages (this may take a while)..."
 
 if retry_with_backoff 3 5 60 brew bundle --file=/dev/stdin <<EOF
@@ -97,11 +93,9 @@ else
     log_warning "Continuing with remaining setup..."
 fi
 
-# Step 3: Install Mac App Store apps
 if [ "$SKIP_MAS" = false ]; then
     log_substep "Installing Mac App Store apps..."
 
-    # Check if mas is available and signed in
     if ! command -v mas >/dev/null 2>&1; then
         log_warning "'mas' command not available, skipping App Store apps"
     else

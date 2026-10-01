@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# Source helper library
 {{ include ".chezmoitemplates/lib.sh" }}
 
 show_banner
@@ -10,7 +9,6 @@ log_info "This script will guide you through configuring various apps."
 log_info "Each app will open with specific instructions."
 echo
 
-# Function to open an app and give instructions.
 # An optional 4th arg is copied to the clipboard (e.g. a license key)
 # instead of being printed to the terminal.
 open_with_instructions() {
@@ -53,7 +51,6 @@ open_with_instructions() {
   fi
 }
 
-# Check if running in VM
 if is_virtual_machine; then
     SKIP_MAS_INSTALLED_APPS=true
     log_info "Virtual machine detected - Mac App Store app instructions will be skipped"
@@ -61,35 +58,29 @@ else
     SKIP_MAS_INSTALLED_APPS=false
 fi
 
-# === DaisyDisk X ===
 open_with_instructions "DaisyDisk" "💾" \
 "Configure the license for DaisyDisk." \
 "{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/liyr2tm5gvmrnole6y6e7o5xyu/licentiesleutel" }}"
 
-# === Messages ===
 open_with_instructions "Messages" "💬" \
 "Configure Messages to sync with iCloud.
 
 ➜ Go to Preferences
 ➜ Enable iCloud sync"
 
-# === Music ===
 open_with_instructions "Music" "🎵" \
 "Sign in to Apple Music with your Apple ID."
 
-# === Safari ===
 open_with_instructions "Safari" "🧭" \
 "Configure Safari extensions.
 
 ➜ Go to Safari → Settings → Extensions
 ➜ Enable/configure your preferred extensions"
 
-# === Transmit ===
 open_with_instructions "Transmit" "🚀" \
 "Configure the license for Transmit." \
 "{{ onepasswordRead "op://afcfz2u36qbb4w5iikx4aol2z4/gr34g7tfsl5siuuodubg4vymg4/licentiesleutel" }}"
 
-# === System Settings ===
 open_with_instructions "System Settings" "⚙️" \
 "Configure screenshot shortcuts:
 
@@ -98,7 +89,6 @@ open_with_instructions "System Settings" "⚙️" \
 
 (Spotlight search shortcuts and menu bar hiding are already handled automatically.)"
 
-# === CleanShot X ===
 open_with_instructions "CleanShot X" "📸" \
 "CleanShot X requires system permissions:
 
@@ -106,7 +96,6 @@ open_with_instructions "CleanShot X" "📸" \
 2. Go to https://licenses.cleanshot.com to activate
 3. Configure keyboard shortcuts in preferences"
 
-# === Karabiner-Elements ===
 open_with_instructions "Karabiner-Elements" "⌨️" \
 "Karabiner-Elements requires system permissions:
 
@@ -114,7 +103,6 @@ open_with_instructions "Karabiner-Elements" "⌨️" \
 2. Grant Accessibility permission when prompted
 3. Configure your keyboard modifications"
 
-# === Control Centre ===
 open_with_instructions "" "⚙️" \
 "Configure Control Center to only keep these modules visible
 (WiFi, Bluetooth, and Sound menu bar visibility are already handled automatically):
@@ -127,7 +115,6 @@ open_with_instructions "" "⚙️" \
 
 
 if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
-    # === Things ===
     open_with_instructions "Things3" "☑️" \
     "Sign in to Things Cloud.
 
@@ -135,20 +122,17 @@ if [ "$SKIP_MAS_INSTALLED_APPS" = false ]; then
 ➜ Sign in with your account"
 fi
 
-# === Aerospace ===
 open_with_instructions "AeroSpace" "📺" \
 "AeroSpace requires system permissions:
 
 1. Grant Accessibility permission when prompted"
 
-# === Rectangle ===
 open_with_instructions "Rectangle" "🪟" \
 "Rectangle requires Accessibility permission to move/resize windows
 (used as the Hyper+F maximize fallback when AeroSpace isn't running):
 
 1. Grant Accessibility permission when prompted"
 
-# === Claude Code sandboxing (nono + herdr) ===
 open_with_instructions "" "🤖" \
 "One-time setup for running Claude Code sandboxed via nono, inside herdr:
 
@@ -163,7 +147,6 @@ open_with_instructions "" "🤖" \
 4. Complete the OAuth login flow in the browser window that opens on
    first gh use"
 
-# === Alcove ===
 open_with_instructions "Alcove" "📺" \
 "Alcove requires system permissions and a license:
 

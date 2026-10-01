@@ -1,61 +1,29 @@
-# Place a copy of this config to ~/.aerospace.toml
-# After that, you can edit ~/.aerospace.toml to your liking
-
-# Config version for compatibility and deprecations
-# Fallback value (if you omit the key): config-version = 1
 config-version = 2
 
-# You can use it to add commands that run after AeroSpace startup.
-# Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = []
 
-# False: launched/quit by a per-machine Focus automation instead.
+# launched/quit by a per-machine Focus automation instead.
 start-at-login = false
 
-# Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
 
-# See: https://nikitabobko.github.io/AeroSpace/guide#layouts
-# The 'accordion-padding' specifies the size of accordion padding
-# You can set 0 to disable the padding feature
 accordion-padding = 8
 
-# Possible values: tiles|accordion
 default-root-container-layout = 'tiles'
 
-# Possible values: horizontal|vertical|auto
-# 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
-#               tall monitor (anything higher than wide) gets vertical orientation
 default-root-container-orientation = 'auto'
 
-# Mouse follows focus when focused monitor changes
-# Drop it from your config, if you don't like this behavior
-# See https://nikitabobko.github.io/AeroSpace/guide#on-focus-changed-callbacks
-# See https://nikitabobko.github.io/AeroSpace/commands#move-mouse
-# Fallback value (if you omit the key): on-focused-monitor-changed = []
 on-focus-changed = ['move-mouse window-lazy-center']
 
-# You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
-# Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-alt-h key
-# Also see: https://nikitabobko.github.io/AeroSpace/goodies#disable-hide-app
 automatically-unhide-macos-hidden-apps = false
 
-# List of workspaces that should stay alive even when they contain no windows,
-# even when they are invisible.
-# This config version is only available since 'config-version = 2'
-# Fallback value (if you omit the key): persistent-workspaces = []
 persistent-workspaces = ["1", "2", "3", "4", "5"]
 
-# A callback that runs every time binding mode changes
-# See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
-# See: https://nikitabobko.github.io/AeroSpace/commands#mode
 on-mode-changed = []
 
-# Route apps to workspaces on open; one block per app-id, no OR-logic.
 # Plain keys must stay above this array-of-tables section (TOML gotcha).
 
-# Chat -> workspace 1
 [[on-window-detected]]
     if.app-id = 'com.apple.MobileSMS'
     run = 'move-node-to-workspace 1'
@@ -78,7 +46,6 @@ on-mode-changed = []
     if.app-id = 'com.microsoft.Outlook'
     run = 'move-node-to-workspace 1'
 
-# Browsers -> workspace 2
 [[on-window-detected]]
     if.app-id = 'com.apple.Safari'
     run = 'move-node-to-workspace 2'
@@ -86,23 +53,20 @@ on-mode-changed = []
     if.app-id = 'com.google.Chrome'
     run = 'move-node-to-workspace 2'
 
-# Warp -> workspace 3
 [[on-window-detected]]
     if.app-id = 'dev.warp.Warp-Stable'
     run = 'move-node-to-workspace 3'
 
-# Zed -> workspace 4
 [[on-window-detected]]
     if.app-id = 'dev.zed.Zed'
     run = 'move-node-to-workspace 4'
 
-# Finder: float, don't tile (must precede the catch-all below).
+# Order matters below: first match wins.
+
 [[on-window-detected]]
     if.app-id = 'com.apple.finder'
     run = 'layout floating'
 
-# 1Password: only the main window tiles; everything else floats.
-# Order matters: first match wins.
 [[on-window-detected]]
     if.app-id = 'com.1password.1password'
     if.window-title-regex-substring = ' — 1Password'
@@ -111,28 +75,17 @@ on-mode-changed = []
     if.app-id = 'com.1password.1password'
     run = 'layout floating'
 
-# Catch-all: everything else -> workspace 5. Must be last.
+# Must be last: catch-all for everything else.
 [[on-window-detected]]
     run = 'move-node-to-workspace 5'
 
-# Possible values: (qwerty|dvorak|colemak)
-# See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
 [key-mapping]
     preset = 'qwerty'
 
-# Workspaces 4 and 5 shift to a secondary monitor when one is connected.
 [workspace-to-monitor-force-assignment]
     4 = 'secondary'
     5 = 'secondary'
 
-# Gaps between windows (inner-*) and between monitor edges (outer-*).
-# Possible values:
-# - Constant:     gaps.outer.top = 8
-# - Per monitor:  gaps.outer.top = [{ monitor.main = 16 }, { monitor."some-pattern" = 32 }, 24]
-#                 In this example, 24 is a default value when there is no match.
-#                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
-#                 See:
-#                 https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
 [gaps]
     inner.horizontal = 8
     inner.vertical =   8

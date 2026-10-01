@@ -1,19 +1,13 @@
 #!/bin/bash
 # Generates a nono profile scoping gh's L7 endpoint policy and git's ssh
 # argv policy to the repo(s) discovered in cwd (origin/upstream), or
-# read-only-everywhere if no repo is discovered at all. Named deterministically
-# from the repo's toplevel path (so any subdirectory of the same repo maps to
-# the same profile) and overwritten fresh on every call -- not a per-launch
-# temp file, so there's nothing to clean up; it just reflects whatever the
-# repo's remotes currently are. Prints the generated profile's NAME (not path
-# -- nono's --extends resolves by name against ~/.config/nono/profiles/, same
-# as --profile, and doesn't accept a raw file path) to stdout.
+# read-only-everywhere if no repo is discovered at all. Prints the generated
+# profile's NAME (not path -- nono's --extends resolves by name against
+# ~/.config/nono/profiles/, same as --profile, and doesn't accept a raw file
+# path) to stdout.
 set -euo pipefail
 
 parse_owner_repo() {
-    # Accepts git@github.com:owner/repo.git, https://github.com/owner/repo.git,
-    # or ssh://git@github.com/owner/repo.git; prints owner/repo, or nothing
-    # for anything else (e.g. a non-GitHub remote).
     local url="$1"
     case "$url" in
         git@github.com:*|https://github.com/*|ssh://git@github.com/*) ;;
@@ -84,7 +78,6 @@ SSH_DEFAULT='allow'
 GH_ALLOW='[{"method": "GET", "path": "/**"}]'
 
 if [ -n "$ORIGIN_REPO" ] || [ -n "$UPSTREAM_REPO" ]; then
-    # At least one repo discovered: scope precisely instead of falling back.
     SSH_DEFAULT='deny'
     GH_ALLOW='[]'
 
@@ -233,13 +226,9 @@ jq -n \
                     from: {
                         session: {
                             sandbox: {
-                                # project_repos (coordinator-only, else []): herdr-projects
-                                # runs its own git preflight checks with cwd set directly to
-                                # a project repo, outside this session own "."
-                                # git_dir_grant: nono has no @git: token for a linked
-                                # worktree own private git-dir (only @git:common-dir,
-                                # the shared object store) -- without it, commit fails
-                                # writing HEAD/index there.
+                                # project_repos: herdr-projects runs git preflight checks
+                                # directly against project repos, outside this session own ".".
+                                # git_dir_grant: see GIT_DIR above.
                                 fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"] + $project_repos + $git_dir_grant,
                                 fs_read_file: ["@git:config-files"],
                                 # project_repos again: a coordinator fetch writes
