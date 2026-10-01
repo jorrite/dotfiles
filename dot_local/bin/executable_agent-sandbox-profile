@@ -55,6 +55,14 @@ HASH="$(printf '%s' "$IDENTIFIER" | shasum -a 256 | cut -c1-16)"
 PROFILE_NAME="agent-sandbox-session-$HASH"
 PROFILE_PATH="$HOME/.config/nono/profiles/$PROFILE_NAME.json"
 
+# nono silently drops a filesystem grant for a path that does not exist yet
+# at profile-generation time (confirmed via its own verbose log: "Profile
+# path '...' does not exist, skipping") -- on a machine where no thread has
+# ever reported progress yet, this directory does not exist, so the grant
+# below would otherwise vanish with no error, and herdr-projects report
+# fails with a bare, unhelpful "Operation not permitted".
+mkdir -p "$HOME/.herdr-projects/.progress"
+
 # --- git's own deny list: the local/destructive-op denials always apply;
 # an unscoped "no repo discovered" launch additionally blocks push outright
 # at this layer (repo-independent, unlike ssh's argv match which needs a
@@ -172,11 +180,35 @@ jq -n \
         env_credentials: {
             "op://afcfz2u36qbb4w5iikx4aol2z4/4smxmjpxpfivhuemag3v3ycztu/passphrase": "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"
         },
-        filesystem: (
+        filesystem: {
+            # Every cs session gets herdr own socket now, not just
+            # coordinators: herdr-projects own progress reporting
+            # (herdr-projects report) needs it too -- it calls back over
+            # this socket to confirm which pane it is running in, and
+            # silently no-ops without it (confirmed: env vars alone are not
+            # enough). Worker threads can plausibly spawn their own
+            # sub-threads too, not just coordinators.
+            unix_socket: ["$HOME/.config/herdr/herdr.sock"],
+            # Progress records live globally under <HERDR_PROJECTS_ROOT>/
+            # .progress/<pane-id>.json -- not per-project, not under any
+            # worktree. Scoped to just this narrow directory rather than
+            # the whole ~/.herdr-projects tree, which also holds other
+            # projects own MEMORY.md/instructions/thread briefs that a
+            # worker has no business reading (per herdr-projects own
+            # THREAD.md: "stay in your working directory").
+            allow: ["$HOME/.herdr-projects/.progress"],
+            # The herdr-projects binary itself lives under a hash-suffixed
+            # plugin checkout that changes on every reinstall/update (same
+            # reason herdr-projects-status resolves its path dynamically
+            # rather than hardcoding it) -- granted broadly since plugin
+            # binaries read-only are not sensitive. project_repos
+            # (coordinator-only, else []) joins the same array rather than
+            # its own "read" key, which would silently overwrite this one
+            # on merge instead of adding to it.
+            read: ["$HOME/.config/herdr/plugins"] + $project_repos
+        } + (
             if $is_coordinator then
                 {
-                    unix_socket: ["$HOME/.config/herdr/herdr.sock"],
-                    read: $project_repos,
                     # herdr own fixed worktree root (default_config:
                     # [worktrees] directory) -- threads are created here,
                     # not inside the repo itself.
