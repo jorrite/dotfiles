@@ -37,6 +37,9 @@ type = "plugin_action"
 command = "herdr-projects.open-popup"
 description = "Projects"
 
+[worktrees]
+directory = "~/.herdr/worktrees"
+
 [terminal]
 # Pin every new pane to fish regardless of $SHELL, so the `claude` fish
 # function (dot_config/fish/functions/claude.fish) -- which redirects to

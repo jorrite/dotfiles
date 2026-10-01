@@ -30,10 +30,18 @@ parse_owner_repo() {
 ORIGIN_REPO=""
 UPSTREAM_REPO=""
 IDENTIFIER="$(pwd)"
+# nono has no dynamic @git: token for a linked worktree's own private
+# git-dir (confirmed: @git:common-dir only covers the main repo's shared
+# .git, not .git/worktrees/<name> -- where commit actually writes HEAD/
+# index/objects-in-progress). Resolved explicitly instead; --absolute-git-dir
+# returns the main repo's .git for a regular checkout (redundant with
+# common-dir, harmless) or the worktree's own private git-dir when linked.
+GIT_DIR=""
 
 TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$TOPLEVEL" ]; then
     IDENTIFIER="$TOPLEVEL"
+    GIT_DIR="$(git rev-parse --absolute-git-dir 2>/dev/null || true)"
     origin_url="$(git remote get-url origin 2>/dev/null || true)"
     upstream_url="$(git remote get-url upstream 2>/dev/null || true)"
     [ -n "$origin_url" ] && ORIGIN_REPO="$(parse_owner_repo "$origin_url")"
@@ -100,17 +108,51 @@ else
     GIT_DENY="$(echo "$GIT_DENY" | jq '. + [{"argv": {"prefix": ["push"]}, "reason": "no repo discovered to scope a push to"}]')"
 fi
 
+# A herdr-projects coordinator's cwd is its project folder (PROJECT.md),
+# never a git repo itself. Grant herdr's own control socket -- which can
+# type keystrokes into *any* pane the daemon manages, so it's coordinator-
+# only, never a plain cs session -- and read access to PROJECT.md's
+# [[repos]] paths, needed for herdr-projects' own git preflight checks when
+# starting a thread.
+IS_COORDINATOR=false
+PROJECT_REPOS='[]'
+WORKTREES_DIR=""
+if [ -f "PROJECT.md" ]; then
+    IS_COORDINATOR=true
+    PROJECT_REPOS="$(awk '/^\+\+\+$/{c++; next} c==1 && /^path = /' PROJECT.md \
+        | sed -E 's/^path = "(.*)"$/\1/' | jq -R . | jq -s .)"
+    WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
+        | sed -E 's/^directory = "(.*)"$/\1/')"
+    WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
+fi
+
 jq -n \
     --argjson git_deny "$GIT_DENY" \
     --arg ssh_default "$SSH_DEFAULT" \
     --argjson ssh_allow "$SSH_ALLOW" \
     --argjson gh_allow "$GH_ALLOW" \
-    '{
+    --argjson is_coordinator "$IS_COORDINATOR" \
+    --argjson project_repos "$PROJECT_REPOS" \
+    --arg git_dir "$GIT_DIR" \
+    '($git_dir | if . == "" then [] else [.] end) as $git_dir_grant |
+    {
         extends: "agent-sandbox-base",
         meta: { name: "agent-sandbox-session" },
         network: {
             tls_intercept: { ca_lifecycle: "trusted", ca_validity: "24h", leaf_validity: "15m" }
         },
+        filesystem: (
+            if $is_coordinator then
+                {
+                    unix_socket: ["$HOME/.config/herdr/herdr.sock"],
+                    read: $project_repos,
+                    # herdr own fixed worktree root (default_config:
+                    # [worktrees] directory) -- threads are created here,
+                    # not inside the repo itself.
+                    allow: ["$HOME/.herdr/worktrees"]
+                }
+            else {} end
+        ),
         command_policies: {
             credentials: {
                 "github-pat": {
@@ -134,9 +176,18 @@ jq -n \
                     from: {
                         session: {
                             sandbox: {
-                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+                                # project_repos (coordinator-only, else []): herdr-projects
+                                # runs its own git preflight checks with cwd set directly to
+                                # a project repo, outside this session own "."
+                                # git_dir_grant: nono has no @git: token for a linked
+                                # worktree own private git-dir (only @git:common-dir,
+                                # the shared object store) -- without it, commit fails
+                                # writing HEAD/index there.
+                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"] + $project_repos + $git_dir_grant,
                                 fs_read_file: ["@git:config-files"],
-                                fs_write: [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent"],
+                                # project_repos again: a coordinator fetch writes
+                                # .git/FETCH_HEAD in the repo itself, not just "."
+                                fs_write: [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent"] + $project_repos + $git_dir_grant,
                                 use_credentials: ["ssh-agent"],
                                 environment: { allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "SSH_AUTH_SOCK"] }
                             },
@@ -144,9 +195,9 @@ jq -n \
                         },
                         gh: {
                             sandbox: {
-                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"] + $git_dir_grant,
                                 fs_read_file: ["@git:config-files"],
-                                fs_write: ["."]
+                                fs_write: ["."] + $git_dir_grant
                             },
                             invocation_policy: { default: "allow" }
                         }
