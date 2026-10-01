@@ -108,6 +108,13 @@ else
     GIT_DENY="$(echo "$GIT_DENY" | jq '. + [{"argv": {"prefix": ["push"]}, "reason": "no repo discovered to scope a push to"}]')"
 fi
 
+# GraphQL (unconditional, gh uses it even for `gh auth status`): every
+# operation shares one POST /graphql path, un-scopable by method+path alone.
+# Safe in practice only because gh api (the unconstrained passthrough) is
+# denied below -- gh pr create itself is bound to real local git state, and
+# GitHub's own fork-relationship check rejects cross-repo PRs regardless.
+GH_ALLOW="$(echo "$GH_ALLOW" | jq '. + [{"method": "POST", "path": "/graphql"}]')"
+
 # A herdr-projects coordinator's cwd is its project folder (PROJECT.md),
 # never a git repo itself. Grant herdr's own control socket -- which can
 # type keystrokes into *any* pane the daemon manages, so it's coordinator-
@@ -325,7 +332,10 @@ jq -n \
                                     {argv: {prefix: ["auth", "login"]}, reason: "changes the authenticated account"},
                                     {argv: {prefix: ["auth", "logout"]}, reason: "changes the authenticated account"},
                                     {argv: {prefix: ["auth", "switch"]}, reason: "changes the authenticated account"},
-                                    {argv: {prefix: ["auth", "refresh"]}, reason: "changes token scopes"}
+                                    {argv: {prefix: ["auth", "refresh"]}, reason: "changes token scopes"},
+                                    # Unlike gh pr create/pr list, gh api accepts arbitrary
+                                    # head/base values with no tie to local git state.
+                                    {argv: {prefix: ["api"]}, reason: "gh api is a raw REST/GraphQL passthrough with no tie to local git state; use gh pr create/gh pr list/gh issue .../etc. instead"}
                                 ]
                             }
                         }
