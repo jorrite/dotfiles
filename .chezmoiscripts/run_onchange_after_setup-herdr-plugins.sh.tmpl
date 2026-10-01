@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+log_step "🧩 Herdr Plugin Installation"
+
+if ! command -v herdr >/dev/null 2>&1; then
+    log_warning "herdr is not installed -- skipping plugin installation"
+    exit 0
+fi
+
+{{ range .herdr_plugins -}}
+log_substep "Installing {{ . }}..."
+herdr plugin install {{ . }} --yes || log_warning "Failed to install {{ . }}"
+{{ end -}}
+
+log_success "Herdr plugins up to date"

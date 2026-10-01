@@ -11,6 +11,12 @@
 # type = "plugin_action"
 # command = "example.layout.apply"
 
+# Suppresses the first-run onboarding wizard permanently -- without this,
+# a plain chezmoi-managed config.toml gets reset to a version lacking
+# herdr's own runtime-written `onboarding = false`, bringing the wizard
+# back on every `chezmoi apply`.
+onboarding = false
+
 [keys]
 # Hyper+H (Caps Lock, remapped to right_shift+right_control+right_option+
 # right_command via Karabiner, held with "h") as the prefix instead of the
@@ -20,3 +26,28 @@
 # remapping Hyper+H to a plain "ctrl+alt+h" chord in Karabiner instead,
 # which herdr's own docs call out as the most reliable option on macOS.
 prefix = "ctrl+alt+cmd+shift+h"
+
+# herdr-projects popup, normally added by `herdr-projects configure`. Kept
+# here instead so it survives `chezmoi apply` -- run `herdr-projects
+# configure --hooks-only` after installing the plugin to set up its Claude
+# Code hooks/skill without letting it also write to this file.
+[[keys.command]]
+key = "prefix+a"
+type = "plugin_action"
+command = "herdr-projects.open-popup"
+description = "Projects"
+
+[ui]
+# herdr-projects' tab-bar "needs attention" indicator. Routed through the
+# herdr-projects-status wrapper (dot_local/bin/executable_herdr-projects-status)
+# instead of the raw binary path `herdr-projects configure` would normally
+# write here, since that path is hash-suffixed and changes on every
+# plugin reinstall/update -- the wrapper resolves the current path at call
+# time instead of baking a stale one into this file.
+tab_bar_right = [{ type = "command", command = "herdr-projects-status --line", interval_seconds = 15, timeout_seconds = 5 }]
+
+[ui.sidebar.agents]
+rows = [["state_icon", { token = "agent", bold = false, dim = false, rules = [{ contains = "​", bold = true }] }, "state_text"], [{ token = "$hp_sub", dim = true }]]
+
+[ui.sidebar.spaces]
+rows = [["state_icon", { token = "workspace", rules = [{ contains = "⠀", bold = true }] }, { token = "branch", dim = true }, "git_status"]]

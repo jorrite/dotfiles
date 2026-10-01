@@ -1,0 +1,14 @@
+#!/bin/bash
+# Stable indirection for herdr's [ui] tab_bar_right "command" entry: that
+# entry type takes a raw shell command with no path templating/substitution
+# (confirmed against herdr's own plugin docs), and `herdr plugin install`
+# replaces a GitHub-managed plugin's entire checkout -- including its
+# hash-suffixed directory name -- on every reinstall/update. Resolving the
+# current plugin_root from plugins.json at call time, instead of baking
+# that path into config.toml, means config.toml never goes stale.
+set -euo pipefail
+
+ROOT="$(jq -r '.[] | select(.plugin_id=="herdr-projects") | .plugin_root' "$HOME/.config/herdr/plugins.json" 2>/dev/null)"
+[ -n "$ROOT" ] && [ -x "$ROOT/target/release/herdr-projects" ] || exit 0
+
+exec "$ROOT/target/release/herdr-projects" needs-you "$@"
