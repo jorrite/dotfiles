@@ -4,6 +4,8 @@
 # is agent-agnostic) and mixes it into Claude Code's own nono profile.
 set -euo pipefail
 
+source agent-sandbox-ssh-setup
+
 PROFILE_NAME="$(agent-sandbox-profile)"
 
 # Resolved via mise rather than a bare "claude" on PATH: the fish `claude`
@@ -24,4 +26,7 @@ if [ -n "${HERDR_ENV:-}" ]; then
     export HERDR_AGENT=claude
 fi
 
-exec nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- "$REAL_CLAUDE" "$@"
+# Not exec'd: this process needs to stay alive after nono exits so the
+# trap registered by agent-sandbox-ssh-setup actually fires and deletes
+# the ephemeral ssh key.
+nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- "$REAL_CLAUDE" "$@"

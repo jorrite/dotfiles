@@ -1,0 +1,23 @@
+#!/bin/bash
+# Meant to be `source`d (not run as its own process) by an agent launcher
+# (e.g. cs-launch) right before it calls `nono run`, so that the `trap`
+# registered below lives in the launcher's own long-running shell -- a
+# separately-invoked script would exit (and fire its own trap) immediately
+# after printing a path, deleting the key before nono even started.
+#
+# Materializes the dedicated git/ssh key (used for both signing and
+# read/write transport) fresh per invocation: never an ambient agent,
+# never a plain checked-in file. PID-suffixed so concurrent sessions (e.g.
+# several herdr-projects worker threads at once) never collide or race
+# each other's cleanup.
+SSH_KEY_DIR="$HOME/.cache/agent-sandbox-ssh-keys"
+mkdir -p "$SSH_KEY_DIR"
+chmod 700 "$SSH_KEY_DIR"
+export AGENT_SANDBOX_SSH_KEY_PATH="$SSH_KEY_DIR/ssh-key-$$"
+( umask 077; op read "op://afcfz2u36qbb4w5iikx4aol2z4/4smxmjpxpfivhuemag3v3ycztu/agent-key" > "$AGENT_SANDBOX_SSH_KEY_PATH" )
+# Public half too, as a real file rather than literal config text -- git
+# writes a literal user.signingkey value to its own $TMPDIR temp file
+# before handing it to ssh-keygen, which only has read access to this
+# dedicated path, not $TMPDIR; passing a path instead avoids that entirely.
+op read "op://afcfz2u36qbb4w5iikx4aol2z4/4smxmjpxpfivhuemag3v3ycztu/agent-key.pub" > "$AGENT_SANDBOX_SSH_KEY_PATH.pub"
+trap 'rm -f "$AGENT_SANDBOX_SSH_KEY_PATH" "$AGENT_SANDBOX_SSH_KEY_PATH.pub"' EXIT
