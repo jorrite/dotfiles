@@ -37,6 +37,16 @@ type = "plugin_action"
 command = "herdr-projects.open-popup"
 description = "Projects"
 
+[terminal]
+# Pin every new pane to fish regardless of $SHELL, so the `claude` fish
+# function (dot_config/fish/functions/claude.fish) -- which redirects to
+# cs-launch's nono sandbox whenever $HERDR_ENV is set -- always applies,
+# including to panes herdr's own daemon spawns for herdr-projects threads
+# and coordinators (confirmed via testing: `herdr agent start` types the
+# command into the pane's actual interactive shell rather than spawning it
+# server-side, so this is shell-, not daemon-, scoped).
+default_shell = "fish"
+
 [ui]
 # herdr-projects' tab-bar "needs attention" indicator. Routed through the
 # herdr-projects-status wrapper (dot_local/bin/executable_herdr-projects-status)

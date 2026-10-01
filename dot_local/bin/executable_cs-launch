@@ -6,4 +6,22 @@ set -euo pipefail
 
 PROFILE_NAME="$(agent-sandbox-profile)"
 
-exec nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- claude "$@"
+# Resolved via mise rather than a bare "claude" on PATH: the fish `claude`
+# function (dot_config/fish/functions/claude.fish) redirects to this script
+# whenever $HERDR_ENV is set, so a bare "claude" here could re-resolve back
+# to that same function/shim and recurse.
+REAL_CLAUDE="$(mise which claude)"
+
+# nono's own startup banner sits in front of claude's screen output, which
+# defeats herdr's screen-pattern agent detection entirely (confirmed: times
+# out, never detected -- the same failure as a wrapper foreground process
+# hiding the real agent, per herdr's own sandbox-wrapper docs). HERDR_AGENT
+# tells herdr directly what's running instead of relying on screen content.
+# Only set inside an actual herdr pane ($HERDR_ENV) -- cs-launch also runs
+# standalone outside herdr, where the hint means nothing and herdr's own
+# docs caution against exporting it unconditionally.
+if [ -n "${HERDR_ENV:-}" ]; then
+    export HERDR_AGENT=claude
+fi
+
+exec nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- "$REAL_CLAUDE" "$@"
