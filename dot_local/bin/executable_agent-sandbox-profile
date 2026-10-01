@@ -126,6 +126,18 @@ if [ -f "PROJECT.md" ]; then
     WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
 fi
 
+# Dedicated git/ssh key (signing + read/write transport, see
+# agent-sandbox-ssh-setup and agent-sandbox-ssh-askpass): no ssh-agent, no
+# ambient daemon -- ssh/ssh-keygen each decrypt it fresh for one operation
+# and never hold it beyond that single process's lifetime. Both paths are
+# expected to already exist (agent-sandbox-ssh-setup is sourced by the
+# launcher before this script runs).
+#
+# SSH_ASKPASS must be a bare command name, not an absolute path: nono's
+# tool-sandbox mediation only intercepts commands reached through its PATH
+# shim (confirmed -- the same reason op-ssh-sign could never work here,
+# since it only exists at an absolute app-bundle path).
+
 jq -n \
     --argjson git_deny "$GIT_DENY" \
     --arg ssh_default "$SSH_DEFAULT" \
@@ -134,12 +146,24 @@ jq -n \
     --argjson is_coordinator "$IS_COORDINATOR" \
     --argjson project_repos "$PROJECT_REPOS" \
     --arg git_dir "$GIT_DIR" \
+    --arg ssh_key_path "$AGENT_SANDBOX_SSH_KEY_PATH" \
+    --arg tmpdir "$TMPDIR" \
     '($git_dir | if . == "" then [] else [.] end) as $git_dir_grant |
     {
         extends: "agent-sandbox-base",
         meta: { name: "agent-sandbox-session" },
         network: {
             tls_intercept: { ca_lifecycle: "trusted", ca_validity: "24h", leaf_validity: "15m" }
+        },
+        # Session-wide, per nono own env_credentials mechanism -- there is
+        # no command-scoped equivalent for a raw secret value (only
+        # local-socket/raw-file/proxy/ambient exist as command-edge
+        # credential types, none of which inject a plain string). Harmless
+        # on its own: the passphrase alone cannot decrypt anything without
+        # the key file too, and the key file is only ever readable by the
+        # ssh/ssh-keygen command edges below, never the session directly.
+        env_credentials: {
+            "op://afcfz2u36qbb4w5iikx4aol2z4/4smxmjpxpfivhuemag3v3ycztu/passphrase": "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"
         },
         filesystem: (
             if $is_coordinator then
@@ -162,17 +186,11 @@ jq -n \
                     env_var: "GH_TOKEN",
                     inject_header: "Authorization",
                     credential_format: "token {}"
-                },
-                "ssh-agent": {
-                    type: "local-socket",
-                    path: "$HOME/.config/1password/agent.sock",
-                    mode: "connect",
-                    env_var: "SSH_AUTH_SOCK"
                 }
             },
             commands: {
                 git: {
-                    can_use: ["ssh"],
+                    can_use: ["ssh", "ssh-keygen"],
                     from: {
                         session: {
                             sandbox: {
@@ -186,10 +204,41 @@ jq -n \
                                 fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"] + $project_repos + $git_dir_grant,
                                 fs_read_file: ["@git:config-files"],
                                 # project_repos again: a coordinator fetch writes
-                                # .git/FETCH_HEAD in the repo itself, not just "."
-                                fs_write: [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent"] + $project_repos + $git_dir_grant,
-                                use_credentials: ["ssh-agent"],
-                                environment: { allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "SSH_AUTH_SOCK"] }
+                                # .git/FETCH_HEAD in the repo itself, not just ".".
+                                # $tmpdir: git stages the signing buffer (the content
+                                # ssh-keygen signs) as a temp file here before invoking
+                                # gpg.ssh.program with it.
+                                fs_write: [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent", $tmpdir] + $project_repos + $git_dir_grant,
+                                # Overrides only within this sandboxed session -- never
+                                # touches the user own ~/.config/git/config. ssh -i
+                                # forces the dedicated key specifically, ignoring any
+                                # other identity (agent or otherwise) that might
+                                # otherwise be offered.
+                                environment: {
+                                    # AGENT_SANDBOX_SSH_KEY_PASSPHRASE: git itself never
+                                    # reads this, but env var filtering is hierarchical --
+                                    # ssh-keygen (a child of git) can only inherit what
+                                    # git itself was first allowed to have, regardless of
+                                    # ssh-keygen own allow_vars (confirmed via testing).
+                                    allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "TMPDIR", "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"],
+                                    set_vars: {
+                                        GIT_CONFIG_COUNT: "3",
+                                        GIT_CONFIG_KEY_0: "user.signingkey",
+                                        GIT_CONFIG_VALUE_0: "\($ssh_key_path).pub",
+                                        GIT_CONFIG_KEY_1: "gpg.format",
+                                        GIT_CONFIG_VALUE_1: "ssh",
+                                        GIT_CONFIG_KEY_2: "gpg.ssh.program",
+                                        GIT_CONFIG_VALUE_2: "ssh-keygen",
+                                        # Bare command name, not "ssh -i ..." -- nono tool-
+                                        # sandbox mediation matches argv[0] literally against
+                                        # declared commands, so a command line with embedded
+                                        # flags here fails to match "ssh" at all (confirmed via
+                                        # testing: "cannot exec ssh -i ... -o ..."). The
+                                        # actual flags are injected via ssh own argv_prepend
+                                        # below instead.
+                                        GIT_SSH_COMMAND: "ssh"
+                                    }
+                                }
                             },
                             invocation_policy: { default: "allow", deny: $git_deny }
                         },
@@ -204,17 +253,53 @@ jq -n \
                     }
                 },
                 ssh: {
+                    can_use: ["agent-sandbox-ssh-askpass"],
                     from: {
                         git: {
                             sandbox: {
-                                use_credentials: ["ssh-agent"],
-                                fs_read_file: ["$HOME/.ssh/known_hosts"],
+                                # "." : ssh needs to resolve its own cwd before it can
+                                # exec the askpass child (same requirement as ssh-keygen
+                                # below; confirmed via testing, not documented anywhere).
+                                fs_read: ["."],
+                                fs_read_file: [$ssh_key_path, "$HOME/.ssh/known_hosts"],
                                 fs_write_file: ["$HOME/.ssh/known_hosts"],
                                 network: { allow_all: true },
-                                argv_prepend: ["-o", "IdentityAgent=$SSH_AUTH_SOCK", "-o", "ControlMaster=no", "-o", "ControlPath=none"],
-                                environment: { allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "SSH_AUTH_SOCK"] }
+                                argv_prepend: ["-i", $ssh_key_path, "-o", "IdentitiesOnly=yes", "-o", "ControlMaster=no", "-o", "ControlPath=none"],
+                                environment: {
+                                    allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"],
+                                    set_vars: { SSH_ASKPASS: "agent-sandbox-ssh-askpass", SSH_ASKPASS_REQUIRE: "force" }
+                                }
                             },
                             invocation_policy: { default: $ssh_default, allow: $ssh_allow }
+                        }
+                    }
+                },
+                "ssh-keygen": {
+                    can_use: ["agent-sandbox-ssh-askpass"],
+                    from: {
+                        git: {
+                            sandbox: {
+                                fs_read: [".", $tmpdir],
+                                fs_write: [$tmpdir],
+                                fs_read_file: [$ssh_key_path, "\($ssh_key_path).pub"],
+                                environment: {
+                                    allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "TMPDIR", "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"],
+                                    set_vars: { SSH_ASKPASS: "agent-sandbox-ssh-askpass", SSH_ASKPASS_REQUIRE: "force" }
+                                }
+                            },
+                            invocation_policy: { default: "allow" }
+                        }
+                    }
+                },
+                "agent-sandbox-ssh-askpass": {
+                    from: {
+                        ssh: {
+                            sandbox: { fs_read: ["."], environment: { allow_vars: ["PATH", "HOME", "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"] } },
+                            invocation_policy: { default: "allow" }
+                        },
+                        "ssh-keygen": {
+                            sandbox: { fs_read: ["."], environment: { allow_vars: ["PATH", "HOME", "AGENT_SANDBOX_SSH_KEY_PASSPHRASE"] } },
+                            invocation_policy: { default: "allow" }
                         }
                     }
                 },

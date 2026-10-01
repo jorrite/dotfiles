@@ -1,0 +1,8 @@
+#!/bin/bash
+# Non-interactive SSH_ASKPASS helper: echoes the dedicated ssh key's
+# passphrase back to ssh/ssh-keygen, which both support this natively via
+# SSH_ASKPASS_REQUIRE=force instead of a TTY prompt. Never a GUI dialog --
+# the passphrase is already known at this point, this just hands it back
+# to the one caller allowed to ask for it (the ssh/ssh-keygen command
+# edges are the only ones with AGENT_SANDBOX_SSH_KEY_PASSPHRASE in scope).
+echo "$AGENT_SANDBOX_SSH_KEY_PASSPHRASE"
