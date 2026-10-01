@@ -1,2 +1,3 @@
-# Run Claude Code sandboxed via nono (must be run inside a herdr pane)
-abbr -a cs 'nono run --profile claude-code --allow-launch-services --allow-cwd -- claude'
+# Run Claude Code sandboxed via nono, scoped to the current repo (must be
+# run inside a herdr pane)
+abbr -a cs 'cs-launch'

@@ -1,0 +1,9 @@
+#!/bin/bash
+# cs = "claude sandbox": thin wrapper that generates a scoped git/gh
+# sandbox profile for the current repo (via agent-sandbox-profile, which
+# is agent-agnostic) and mixes it into Claude Code's own nono profile.
+set -euo pipefail
+
+PROFILE_NAME="$(agent-sandbox-profile)"
+
+exec nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- claude "$@"

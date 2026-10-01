@@ -1,0 +1,202 @@
+#!/bin/bash
+# Generates a nono profile scoping gh's L7 endpoint policy and git's ssh
+# argv policy to the repo(s) discovered in cwd (origin/upstream), or
+# read-only-everywhere if no repo is discovered at all. Named deterministically
+# from the repo's toplevel path (so any subdirectory of the same repo maps to
+# the same profile) and overwritten fresh on every call -- not a per-launch
+# temp file, so there's nothing to clean up; it just reflects whatever the
+# repo's remotes currently are. Prints the generated profile's NAME (not path
+# -- nono's --extends resolves by name against ~/.config/nono/profiles/, same
+# as --profile, and doesn't accept a raw file path) to stdout.
+set -euo pipefail
+
+parse_owner_repo() {
+    # Accepts git@github.com:owner/repo.git, https://github.com/owner/repo.git,
+    # or ssh://git@github.com/owner/repo.git; prints owner/repo, or nothing
+    # for anything else (e.g. a non-GitHub remote).
+    local url="$1"
+    case "$url" in
+        git@github.com:*|https://github.com/*|ssh://git@github.com/*) ;;
+        *) return ;;
+    esac
+    echo "$url" | sed -E \
+        -e 's#^git@github\.com:##' \
+        -e 's#^https://github\.com/##' \
+        -e 's#^ssh://git@github\.com/##' \
+        -e 's#\.git$##' \
+        -e 's#/$##'
+}
+
+ORIGIN_REPO=""
+UPSTREAM_REPO=""
+IDENTIFIER="$(pwd)"
+
+TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$TOPLEVEL" ]; then
+    IDENTIFIER="$TOPLEVEL"
+    origin_url="$(git remote get-url origin 2>/dev/null || true)"
+    upstream_url="$(git remote get-url upstream 2>/dev/null || true)"
+    [ -n "$origin_url" ] && ORIGIN_REPO="$(parse_owner_repo "$origin_url")"
+    [ -n "$upstream_url" ] && UPSTREAM_REPO="$(parse_owner_repo "$upstream_url")"
+fi
+
+# Deterministic, not a per-launch temp file: any subdirectory of the same
+# repo (or the same non-repo directory) maps to the same profile name, which
+# this script overwrites fresh on every call.
+HASH="$(printf '%s' "$IDENTIFIER" | shasum -a 256 | cut -c1-16)"
+PROFILE_NAME="agent-sandbox-session-$HASH"
+PROFILE_PATH="$HOME/.config/nono/profiles/$PROFILE_NAME.json"
+
+# --- git's own deny list: the local/destructive-op denials always apply;
+# an unscoped "no repo discovered" launch additionally blocks push outright
+# at this layer (repo-independent, unlike ssh's argv match which needs a
+# specific repo string) since ssh has no way to generically distinguish
+# upload-pack from receive-pack without one.
+GIT_DENY='[
+    {"argv": {"prefix": ["clean"]}, "reason": "irreversibly deletes untracked files"},
+    {"argv": {"contains": ["--hard"]}, "reason": "irreversibly discards local changes"},
+    {"argv": {"contains": ["-D"]}, "reason": "force-deletes a branch"},
+    {"argv": {"prefix": ["filter-branch"]}, "reason": "rewrites history"},
+    {"argv": {"prefix": ["remote", "add"]}, "reason": "would let the session push to a repo the ssh argv policy never scoped"},
+    {"argv": {"prefix": ["remote", "set-url"]}, "reason": "would let the session push to a repo the ssh argv policy never scoped"},
+    {"argv": {"prefix": ["remote", "rename"]}, "reason": "would let the session push to a repo the ssh argv policy never scoped"},
+    {"argv": {"prefix": ["remote", "remove"]}, "reason": "would let the session push to a repo the ssh argv policy never scoped"}
+]'
+
+SSH_ALLOW='[]'
+SSH_DEFAULT='allow'
+GH_ALLOW='[{"method": "GET", "path": "/**"}]'
+
+if [ -n "$ORIGIN_REPO" ] || [ -n "$UPSTREAM_REPO" ]; then
+    # At least one repo discovered: scope precisely instead of falling back.
+    SSH_DEFAULT='deny'
+    GH_ALLOW='[]'
+
+    if [ -n "$ORIGIN_REPO" ]; then
+        SSH_ALLOW="$(jq -n --arg repo "$ORIGIN_REPO" --arg q "'" '[
+            {argv: {contains: ["git-upload-pack " + $q + $repo + ".git" + $q]}, reason: "read from own repo"},
+            {argv: {contains: ["git-receive-pack " + $q + $repo + ".git" + $q]}, reason: "write to own repo"}
+        ]')"
+        GH_ALLOW="$(jq -n --arg repo "$ORIGIN_REPO" '
+            ["GET", "POST", "PATCH", "PUT", "DELETE"] as $methods |
+            [$methods[] | {method: ., path: "/repos/\($repo)"}] +
+            [$methods[] | {method: ., path: "/repos/\($repo)/**"}]
+        ')"
+    fi
+
+    if [ -n "$UPSTREAM_REPO" ]; then
+        SSH_ALLOW="$(echo "$SSH_ALLOW" | jq --arg repo "$UPSTREAM_REPO" --arg q "'" '. + [
+            {argv: {contains: ["git-upload-pack " + $q + $repo + ".git" + $q]}, reason: "read from upstream"}
+        ]')"
+        GH_ALLOW="$(echo "$GH_ALLOW" | jq --arg repo "$UPSTREAM_REPO" '. + [
+            {method: "GET", path: "/repos/\($repo)"},
+            {method: "GET", path: "/repos/\($repo)/**"},
+            {method: "POST", path: "/repos/\($repo)/pulls"}
+        ]')"
+    fi
+else
+    # No repo discovered at all: read-only-everywhere. Push is blocked at
+    # the git layer above (GIT_DENY), not here, so ssh needs no restriction.
+    GIT_DENY="$(echo "$GIT_DENY" | jq '. + [{"argv": {"prefix": ["push"]}, "reason": "no repo discovered to scope a push to"}]')"
+fi
+
+jq -n \
+    --argjson git_deny "$GIT_DENY" \
+    --arg ssh_default "$SSH_DEFAULT" \
+    --argjson ssh_allow "$SSH_ALLOW" \
+    --argjson gh_allow "$GH_ALLOW" \
+    '{
+        extends: "agent-sandbox-base",
+        meta: { name: "agent-sandbox-session" },
+        network: {
+            tls_intercept: { ca_lifecycle: "trusted", ca_validity: "24h", leaf_validity: "15m" }
+        },
+        command_policies: {
+            credentials: {
+                "github-pat": {
+                    type: "proxy",
+                    upstream: "https://api.github.com",
+                    credential_key: "op://afcfz2u36qbb4w5iikx4aol2z4/omg7kda2wxyblbnzpm2qsa63ua/6m3ew3245raxoyrnctwfm5pnii",
+                    env_var: "GH_TOKEN",
+                    inject_header: "Authorization",
+                    credential_format: "token {}"
+                },
+                "ssh-agent": {
+                    type: "local-socket",
+                    path: "$HOME/.config/1password/agent.sock",
+                    mode: "connect",
+                    env_var: "SSH_AUTH_SOCK"
+                }
+            },
+            commands: {
+                git: {
+                    can_use: ["ssh"],
+                    from: {
+                        session: {
+                            sandbox: {
+                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+                                fs_read_file: ["@git:config-files"],
+                                fs_write: [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent"],
+                                use_credentials: ["ssh-agent"],
+                                environment: { allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "SSH_AUTH_SOCK"] }
+                            },
+                            invocation_policy: { default: "allow", deny: $git_deny }
+                        },
+                        gh: {
+                            sandbox: {
+                                fs_read: [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+                                fs_read_file: ["@git:config-files"],
+                                fs_write: ["."]
+                            },
+                            invocation_policy: { default: "allow" }
+                        }
+                    }
+                },
+                ssh: {
+                    from: {
+                        git: {
+                            sandbox: {
+                                use_credentials: ["ssh-agent"],
+                                fs_read_file: ["$HOME/.ssh/known_hosts"],
+                                fs_write_file: ["$HOME/.ssh/known_hosts"],
+                                network: { allow_all: true },
+                                argv_prepend: ["-o", "IdentityAgent=$SSH_AUTH_SOCK", "-o", "ControlMaster=no", "-o", "ControlPath=none"],
+                                environment: { allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "SSH_AUTH_SOCK"] }
+                            },
+                            invocation_policy: { default: $ssh_default, allow: $ssh_allow }
+                        }
+                    }
+                },
+                gh: {
+                    can_use: ["git"],
+                    from: {
+                        session: {
+                            sandbox: {
+                                fs_read: [".", "$HOME/.config/gh"],
+                                network: { allow_domain: ["api.github.com"] },
+                                credentials: [
+                                    { name: "github-pat", endpoint_policy: { default: "deny", allow: $gh_allow } }
+                                ],
+                                environment: {
+                                    allow_vars: ["PATH", "HOME", "LANG", "LC_*", "TERM", "GH_TOKEN",
+                                                 "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+                                                 "http_proxy", "https_proxy", "no_proxy", "NONO_PROXY_TOKEN"]
+                                }
+                            },
+                            invocation_policy: {
+                                default: "allow",
+                                deny: [
+                                    {argv: {prefix: ["auth", "login"]}, reason: "changes the authenticated account"},
+                                    {argv: {prefix: ["auth", "logout"]}, reason: "changes the authenticated account"},
+                                    {argv: {prefix: ["auth", "switch"]}, reason: "changes the authenticated account"},
+                                    {argv: {prefix: ["auth", "refresh"]}, reason: "changes token scopes"}
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }' > "$PROFILE_PATH"
+
+echo "$PROFILE_NAME"

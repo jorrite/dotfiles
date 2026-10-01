@@ -1,0 +1,20 @@
+{
+  // Agent-agnostic base: toolchain groups plus nothing else. Has no
+  // command_policies at all -- every credential/command edge (git/ssh/gh)
+  // is generated fresh, self-contained, by agent-sandbox-profile on each
+  // invocation, and this profile can't be run standalone (nono refuses to
+  // even start the sandbox without the generated profile's command
+  // declarations). Not tied to any specific coding agent: a launcher (e.g.
+  // cs-launch) mixes the generated profile in via `nono run --profile
+  // <agent> --extends <generated-profile>`, and the generated profile's own
+  // "extends" pulls this one in transitively -- nothing here ever
+  // references an agent's profile directly.
+  "extends": "default",
+  "meta": {
+    "name": "agent-sandbox-base",
+    "description": "Agent-agnostic toolchain groups (mise, go); git/gh policy lives in the generated profile"
+  },
+  "groups": {
+    "include": ["mise_manager", "go_runtime", "go_runtime_macos"]
+  }
+}

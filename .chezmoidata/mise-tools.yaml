@@ -17,6 +17,7 @@ mise_tools:
     checkov: "latest"
     golangci-lint: "v2.11.4"
     herdr: "latest"
+    nono: "latest"
     age: "latest"
     yq: "latest"
     claude-code: "latest"

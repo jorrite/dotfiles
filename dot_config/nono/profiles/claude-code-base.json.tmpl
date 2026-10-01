@@ -5,8 +5,11 @@
     "name": "claude-code-base",
     "description": "Shared harness for Claude Code: mise toolchains, gated git/gh"
   },
-  "filesystem": {
-    "read": ["$HOME/.local/share/mise"]
+  // mise_manager is the built-in group for mise's own paths (/etc/mise,
+  // ~/.local/bin/mise, ~/.config/mise, ~/.local/share/mise) -- broader and
+  // better-maintained than a hand-picked path.
+  "groups": {
+    "include": ["mise_manager", "go_runtime", "go_runtime_macos"]
   },
 
   "command_policies": {
@@ -21,8 +24,21 @@
         "from": {
           "session": {
             "sandbox": {
-              "fs_read": ["."],
-              "fs_write": ["."],
+              // Homebrew-installed git needs its own dylibs (pcre2,
+              // gettext) and exec-path helpers (git-remote-https) to run
+              // at all under nono's tool-sandbox -- matches the scope of
+              // the built-in homebrew_macos group, which isn't itself
+              // includable here (CommandSandboxConfig has no "groups"
+              // field; built-in groups only apply at the session level).
+              // @git:config-files dynamically discovers the right global/
+              // system config files (including a custom core.excludesfile)
+              // by actually running `git config --list`, rather than
+              // hardcoding paths that drift if that setting ever changes.
+              // @git:hooks-path/common-dir/worktree/toplevel(-parent) make
+              // a global core.hooksPath and `git worktree add` work too.
+              "fs_read": [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+              "fs_read_file": ["@git:config-files"],
+              "fs_write": [".", "@git:common-dir", "@git:worktree", "@git:toplevel", "@git:toplevel-parent"],
               "unix_socket_bind": ["{{ .chezmoi.homeDir }}/.config/1password/agent.sock"]
             },
             "invocation_policy": {
@@ -35,6 +51,20 @@
                 { "argv": { "prefix": ["filter-branch"] }, "reason": "rewrites history" }
               ]
             }
+          },
+          // gh shells out to git for repo context (e.g. `gh pr view` with no
+          // --repo needs to read the current remote) -- without this edge,
+          // that exec is denied since git isn't a command gh has permission
+          // to chain into.
+          "gh": {
+            "sandbox": {
+              "fs_read": [".", "/opt/homebrew", "@git:hooks-path", "@git:common-dir", "@git:worktree", "@git:toplevel"],
+              "fs_read_file": ["@git:config-files"],
+              "fs_write": ["."]
+            },
+            "invocation_policy": {
+              "default": "allow"
+            }
           }
         }
       },
@@ -43,6 +73,7 @@
       // that visibly changes something on GitHub is denied outright --
       // run those yourself when you actually want to publish/act.
       "gh": {
+        "can_use": ["git"],
         "from": {
           "session": {
             "sandbox": {
