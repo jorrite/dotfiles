@@ -10,3 +10,13 @@
 # key = "prefix+l"
 # type = "plugin_action"
 # command = "example.layout.apply"
+
+[keys]
+# Hyper+H (Caps Lock, remapped to right_shift+right_control+right_option+
+# right_command via Karabiner, held with "h") as the prefix instead of the
+# default ctrl+b -- nothing else on this machine uses that chord. Relies on
+# Warp's Kitty-keyboard-protocol support to forward the full modifier
+# combination through to herdr; if it doesn't register, fall back to
+# remapping Hyper+H to a plain "ctrl+alt+h" chord in Karabiner instead,
+# which herdr's own docs call out as the most reliable option on macOS.
+prefix = "ctrl+alt+cmd+shift+h"
