@@ -59,6 +59,12 @@ default_shell = "fish"
 # time instead of baking a stale one into this file.
 tab_bar_right = [{ type = "command", command = "herdr-projects-status --line", interval_seconds = 15, timeout_seconds = 5 }]
 
+[ui.toast]
+# Desktop notifications for background agent state (done / needs input),
+# via the outer terminal instead of herdr's own in-app toast or the OS's
+# notification service -- also keeps working when attached over SSH.
+delivery = "terminal"
+
 [ui.sidebar.agents]
 rows = [["state_icon", { token = "agent", bold = false, dim = false, rules = [{ contains = "​", bold = true }] }, "state_text"], [{ token = "$hp_sub", dim = true }]]
 
