@@ -167,8 +167,19 @@ jq -n \
     {
         extends: "agent-sandbox-base",
         meta: { name: "agent-sandbox-session" },
+        # leaf_validity governs the per-host cert nono mints to decrypt gh
+        # GraphQL/REST calls to api.github.com for the github-pat credential
+        # proxy below (phantom GH_TOKEN swapped for the real PAT in-flight).
+        # Confirmed live: nono mints that leaf cert once per session and
+        # never re-mints it on reuse, so once wall-clock time crosses the
+        # original 15m validity window every subsequent gh API call fails
+        # with "x509: certificate has expired" -- identical expiry timestamp
+        # on every failing call, well past 15 minutes into an ordinary
+        # multi-hour agent session. Raised to comfortably outlive any single
+        # session instead of tuning around the underlying nono staleness
+        # bug; capped at ca_validity regardless of the value set here.
         network: {
-            tls_intercept: { ca_lifecycle: "trusted", ca_validity: "24h", leaf_validity: "15m" }
+            tls_intercept: { ca_lifecycle: "trusted", ca_validity: "24h", leaf_validity: "12h" }
         },
         # Session-wide, per nono own env_credentials mechanism -- there is
         # no command-scoped equivalent for a raw secret value (only
