@@ -118,10 +118,64 @@ fi
 
 # GraphQL (unconditional, gh uses it even for `gh auth status`): every
 # operation shares one POST /graphql path, un-scopable by method+path alone.
-# Safe in practice only because gh api (the unconstrained passthrough) is
-# denied below -- gh pr create itself is bound to real local git state, and
-# GitHub's own fork-relationship check rejects cross-repo PRs regardless.
+# Safe in practice only because `gh api graphql` itself is denied below (it
+# stays blocked even though plain REST GET is now allowed -- see
+# GH_API_INVOCATION_DENY) -- gh pr create itself is bound to real local git
+# state, and GitHub's own fork-relationship check rejects cross-repo PRs
+# regardless.
 GH_ALLOW="$(echo "$GH_ALLOW" | jq '. + [{"method": "POST", "path": "/graphql"}]')"
+
+# gh api invocation-layer deny list: GET (the default, or an explicit GET
+# override) is allowed to fall through to this policy's overall
+# default:"allow"; every mutating method is still denied regardless of path,
+# since GH_ALLOW above already permits POST/PATCH/PUT/DELETE too for the
+# discovered repo's own paths (scoped by path there, not by whether this
+# invocation layer trusts the session to mutate it).
+#
+# gh's method flag has 4 spellings -- "-X POST" / "-XPOST" (pflag shorthand
+# attaches a value with no separator) / "--method POST" / "--method=POST" --
+# and nono's argv "contains" matcher only matches an exact, whole-token,
+# case-sensitive, contiguous sequence (confirmed empirically with `nono
+# why`), so each spelling needs its own rule; there is no wildcard or
+# negation to express "anything but GET" in one rule. GitHub's API only
+# ever matches upper-case method tokens, so a differently-cased mutating
+# attempt would 404/405 harmlessly even if it slipped past this list, but
+# upper- and lower-case are both covered anyway since gh does not reject or
+# normalize the value itself before sending it.
+#
+# `gh api graphql` stays denied outright (any method, any flags): GraphQL
+# has no method+path split for GH_ALLOW to scope by, queries and mutations
+# are indistinguishable from argv alone (both are POST), and `-f`/`-F`
+# silently flip gh's *own* default method from GET to POST with no `-X`/
+# `--method` token to catch -- `gh api graphql -f query='mutation{...}'`
+# would otherwise sail through as an unscoped, fully-authenticated GraphQL
+# mutation. The same `-f`/`-F` default-method flip applies to plain REST
+# paths too (e.g. `gh api repos/{owner}/{repo}/issues -f title=x` is a real
+# POST with no `-X` anywhere in argv), but `-f`/`-F`/`--field`/`--raw-field`
+# are reused for unrelated, legitimate flags on other gh subcommands
+# (pr/issue create --fill, workflow run --field, project item-edit/
+# item-list --field, and `-f` alone also means --force/--follow/--filename/
+# --env-file elsewhere) that this same gh-wide invocation_policy governs,
+# and nono's argv matcher can't express "only when the first word is api"
+# together with "contains this flag" in one rule (validated: a rule must
+# define exactly one argv matcher). Denying bare `-f`/`-F` would therefore
+# break those other subcommands; narrower --input is the one exception
+# (confirmed unique to `gh api` across gh's whole command reference) and is
+# denied below. The REST-path -f/-F gap is a known residual: see this
+# thread's report.
+GH_API_INVOCATION_DENY="$(jq -n '
+    ["POST", "PUT", "PATCH", "DELETE"] as $methods |
+    ($methods + ($methods | map(ascii_downcase))) as $all_cases |
+    [
+        {argv: {contains: ["graphql"]}, reason: "gh api graphql is an unscoped single endpoint for both reads and mutations with no method+path split to allow-list by; denied outright regardless of method or flags"},
+        {argv: {contains: ["--input"]}, reason: "gh api --input supplies an arbitrary raw request body; denied regardless of method"}
+    ] + [$all_cases[] |
+        {argv: {contains: ["-X", .]}, reason: "gh api must be GET (the default, or an explicit GET override); \(.) is denied regardless of path"},
+        {argv: {contains: ["-X" + .]}, reason: "gh api must be GET (the default, or an explicit GET override); \(.) is denied regardless of path"},
+        {argv: {contains: ["--method", .]}, reason: "gh api must be GET (the default, or an explicit GET override); \(.) is denied regardless of path"},
+        {argv: {contains: ["--method=" + .]}, reason: "gh api must be GET (the default, or an explicit GET override); \(.) is denied regardless of path"}
+    ]
+')"
 
 # A herdr-projects coordinator's cwd is its project folder (PROJECT.md),
 # never a git repo itself. Grant herdr's own control socket -- which can
@@ -158,6 +212,7 @@ jq -n \
     --arg ssh_default "$SSH_DEFAULT" \
     --argjson ssh_allow "$SSH_ALLOW" \
     --argjson gh_allow "$GH_ALLOW" \
+    --argjson gh_api_invocation_deny "$GH_API_INVOCATION_DENY" \
     --argjson is_coordinator "$IS_COORDINATOR" \
     --argjson project_repos "$PROJECT_REPOS" \
     --arg git_dir "$GIT_DIR" \
@@ -375,11 +430,8 @@ jq -n \
                                     {argv: {prefix: ["auth", "login"]}, reason: "changes the authenticated account"},
                                     {argv: {prefix: ["auth", "logout"]}, reason: "changes the authenticated account"},
                                     {argv: {prefix: ["auth", "switch"]}, reason: "changes the authenticated account"},
-                                    {argv: {prefix: ["auth", "refresh"]}, reason: "changes token scopes"},
-                                    # Unlike gh pr create/pr list, gh api accepts arbitrary
-                                    # head/base values with no tie to local git state.
-                                    {argv: {prefix: ["api"]}, reason: "gh api is a raw REST/GraphQL passthrough with no tie to local git state; use gh pr create/gh pr list/gh issue .../etc. instead"}
-                                ]
+                                    {argv: {prefix: ["auth", "refresh"]}, reason: "changes token scopes"}
+                                ] + $gh_api_invocation_deny
                             }
                         }
                     }
