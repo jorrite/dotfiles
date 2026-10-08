@@ -69,21 +69,28 @@ if [ -n "$TOPLEVEL" ]; then
 fi
 
 # Only ever grant sibling-read access when the originating repo lives
-# directly under the user's actual projects directory, ~/Development or
-# ~/development (either capitalization) -- e.g. ~/Development/some-project,
-# whose sibling parent is exactly ~/Development itself. A checkout living
-# anywhere else is skipped entirely: treated the same as "no repo
-# discovered" below (an empty platform_overrides, not a smaller grant),
-# since there is no general way to tell a directory that only holds sibling
-# projects from one that also holds unrelated app state. This repo itself
-# is the motivating counter-example -- checked out at ~/.local/share/
-# chezmoi, its computed sibling parent is ~/.local/share, which also holds
-# unrelated app state/caches/credentials for every other tool on the
-# machine, not just sibling "projects"; granting read there would be far
-# broader than intended, so this guard clears MAIN_REPO_PARENT back to "".
-if [ "$MAIN_REPO_PARENT" != "$HOME/Development" ] && [ "$MAIN_REPO_PARENT" != "$HOME/development" ]; then
-    MAIN_REPO_PARENT=""
-fi
+# under the user's actual projects directory, ~/Development or
+# ~/development (either capitalization) -- either directly, e.g.
+# ~/Development/some-project (sibling parent is ~/Development itself), or
+# nested arbitrarily deep, e.g. ~/Development/wrk/github/org/some-repo
+# (sibling parent is ~/Development/wrk/github/org, that repo's own real
+# immediate parent -- never widened to ~/Development itself). The case
+# patterns below are a real path-boundary check (literal "/" after the
+# root), not a string prefix match, so ~/DevelopmentOther or
+# ~/Development-foo do not qualify. A checkout living entirely outside the
+# tree is skipped: treated the same as "no repo discovered" below (an empty
+# platform_overrides, not a smaller grant), since there is no general way
+# to tell a directory that only holds sibling projects from one that also
+# holds unrelated app state. This repo itself is the motivating
+# counter-example -- checked out at ~/.local/share/chezmoi, its computed
+# sibling parent is ~/.local/share, which also holds unrelated app
+# state/caches/credentials for every other tool on the machine, not just
+# sibling "projects"; granting read there would be far broader than
+# intended, so this guard clears MAIN_REPO_PARENT back to "".
+case "$MAIN_REPO_PARENT" in
+    "$HOME/Development"|"$HOME/development"|"$HOME/Development"/*|"$HOME/development"/*) ;;
+    *) MAIN_REPO_PARENT="" ;;
+esac
 
 # Plain-credential file conventions to block within the sibling read grant
 # below. Not an exhaustive secret-scan -- a scoped set of widely-recognized
@@ -279,18 +286,20 @@ fi
 # Sibling-read roots for a coordinator, parallel to MAIN_REPO_PARENT above but
 # derived from every one of PROJECT_REPOS's paths instead of a single
 # cwd-discovered one -- a coordinator's cwd is its project folder, never a
-# repo, so MAIN_REPO_PARENT is always "" for it. Same dirname + exact-parent
-# guard as MAIN_REPO_PARENT (never loosened to a prefix match), applied
-# per-repo and deduplicated, since a project can list several repos that
-# share the same ~/Development parent.
+# repo, so MAIN_REPO_PARENT is always "" for it. Same dirname + containment
+# guard as MAIN_REPO_PARENT, applied per-repo (each repo keeps its own real
+# immediate parent, not a shared hardcoded root) and deduplicated, since a
+# project can list several repos that resolve to the very same parent.
 COORDINATOR_SIBLING_PARENTS='[]'
 if [ "$IS_COORDINATOR" = true ]; then
     parents=()
     while IFS= read -r repo_path; do
         parent="$(dirname "$repo_path")"
-        if [ "$parent" = "$HOME/Development" ] || [ "$parent" = "$HOME/development" ]; then
-            parents+=("$parent")
-        fi
+        case "$parent" in
+            "$HOME/Development"|"$HOME/development"|"$HOME/Development"/*|"$HOME/development"/*)
+                parents+=("$parent")
+                ;;
+        esac
     done < <(echo "$PROJECT_REPOS" | jq -r '.[]')
     if [ "${#parents[@]}" -gt 0 ]; then
         COORDINATOR_SIBLING_PARENTS="$(printf '%s\n' "${parents[@]}" | jq -R . | jq -s 'unique')"
