@@ -276,6 +276,27 @@ if [ -f "PROJECT.md" ]; then
     WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
 fi
 
+# Sibling-read roots for a coordinator, parallel to MAIN_REPO_PARENT above but
+# derived from every one of PROJECT_REPOS's paths instead of a single
+# cwd-discovered one -- a coordinator's cwd is its project folder, never a
+# repo, so MAIN_REPO_PARENT is always "" for it. Same dirname + exact-parent
+# guard as MAIN_REPO_PARENT (never loosened to a prefix match), applied
+# per-repo and deduplicated, since a project can list several repos that
+# share the same ~/Development parent.
+COORDINATOR_SIBLING_PARENTS='[]'
+if [ "$IS_COORDINATOR" = true ]; then
+    parents=()
+    while IFS= read -r repo_path; do
+        parent="$(dirname "$repo_path")"
+        if [ "$parent" = "$HOME/Development" ] || [ "$parent" = "$HOME/development" ]; then
+            parents+=("$parent")
+        fi
+    done < <(echo "$PROJECT_REPOS" | jq -r '.[]')
+    if [ "${#parents[@]}" -gt 0 ]; then
+        COORDINATOR_SIBLING_PARENTS="$(printf '%s\n' "${parents[@]}" | jq -R . | jq -s 'unique')"
+    fi
+fi
+
 # Dedicated git/ssh key (signing + read/write transport, see
 # agent-sandbox-ssh-setup and agent-sandbox-ssh-askpass): no ssh-agent, no
 # ambient daemon -- ssh/ssh-keygen each decrypt it fresh for one operation
@@ -300,9 +321,16 @@ jq -n \
     --arg ssh_key_path "$AGENT_SANDBOX_SSH_KEY_PATH" \
     --arg tmpdir "$TMPDIR" \
     --arg main_repo_parent "$MAIN_REPO_PARENT" \
+    --argjson coordinator_sibling_parents "$COORDINATOR_SIBLING_PARENTS" \
     --argjson credential_deny_suffixes "$CREDENTIAL_DENY_SUFFIXES" \
     '($git_dir | if . == "" then [] else [.] end) as $git_dir_grant |
-    ($main_repo_parent | if . == "" then [] else [.] end) as $siblings_grant |
+    # Single cwd-discovered parent (plain sessions) plus every qualifying
+    # parent of a coordinator own PROJECT_REPOS (coordinator sessions) -- the
+    # two are mutually exclusive in practice (MAIN_REPO_PARENT is always ""
+    # for a coordinator, coordinator_sibling_parents is always [] for a
+    # plain session) but merged rather than branched so either, both, or
+    # neither can populate the grant without a separate code path.
+    (($main_repo_parent | if . == "" then [] else [.] end) + $coordinator_sibling_parents | unique) as $siblings_grant |
     {
         extends: "agent-sandbox-base",
         meta: { name: "agent-sandbox-session" },
@@ -370,9 +398,12 @@ jq -n \
         # main checkout (e.g. other projects under ~/.local/share next to
         # ~/.local/share/chezmoi) -- deliberately broad, requested so a
         # session can see sibling repos/files on disk, never write-granted.
-        # macOS-only: Landlock (Linux) is a strict allow-list with no
-        # kernel-level deny primitive, so a filesystem.deny pattern that
-        # overlaps a filesystem.read grant is a hard launch error there
+        # For a coordinator, $siblings_grant can hold one root per distinct
+        # ~/Development parent across all of PROJECT_REPOS, not just one, so
+        # the deny list below iterates every root instead of assuming a
+        # single one. macOS-only: Landlock (Linux) is a strict allow-list
+        # with no kernel-level deny primitive, so a filesystem.deny pattern
+        # that overlaps a filesystem.read grant is a hard launch error there
         # (confirmed in nono own profile guide) rather than an enforced
         # carve-out -- there is no way to express "read this directory
         # except these credential-shaped files" safely on Linux short of
@@ -387,7 +418,7 @@ jq -n \
                     filesystem: {
                         read: $siblings_grant,
                         deny: [
-                            $siblings_grant[0] as $root |
+                            $siblings_grant[] as $root |
                             $credential_deny_suffixes[] |
                             "\($root)/\(.)"
                         ]
