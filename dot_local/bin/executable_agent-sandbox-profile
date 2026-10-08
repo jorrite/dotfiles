@@ -84,7 +84,11 @@ SSH_DEFAULT='allow'
 GH_ALLOW='[{"method": "GET", "path": "/**"}]'
 
 if [ -n "$ORIGIN_REPO" ] || [ -n "$UPSTREAM_REPO" ]; then
-    # At least one repo discovered: scope precisely instead of falling back.
+    # At least one repo discovered: scope git/ssh (push/pull transport) and
+    # gh's mutating REST methods precisely to it instead of falling back.
+    # (GH_ALLOW is rebuilt from scratch by the jq -n calls below, so the
+    # any-repo GET rule is appended afterwards instead of seeded here --
+    # seeding it here would just get discarded.)
     SSH_DEFAULT='deny'
     GH_ALLOW='[]'
 
@@ -115,6 +119,16 @@ else
     # the git layer above (GIT_DENY), not here, so ssh needs no restriction.
     GIT_DENY="$(echo "$GIT_DENY" | jq '. + [{"argv": {"prefix": ["push"]}, "reason": "no repo discovered to scope a push to"}]')"
 fi
+
+# REST reads are left open to any repo on GitHub -- not just the one(s)
+# scoped above -- since the unconditional POST /graphql allow below already
+# gives gh's own GraphQL-backed read subcommands (e.g. `gh repo view
+# other/repo`, `gh issue list -R other/repo`) equivalent any-repo read
+# access today; this just makes plain `gh api repos/...` REST reads
+# consistent with that, rather than opening a capability that didn't
+# already exist. Mutations (POST/PUT/PATCH/DELETE) stay scoped to exactly
+# the discovered repo(s) above, never broadened here.
+GH_ALLOW="$(echo "$GH_ALLOW" | jq '. + [{"method": "GET", "path": "/repos/**"}]')"
 
 # GraphQL (unconditional, gh uses it even for `gh auth status`): every
 # operation shares one POST /graphql path, un-scopable by method+path alone.
