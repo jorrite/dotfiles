@@ -38,15 +38,55 @@ IDENTIFIER="$(pwd)"
 # common-dir, harmless) or the worktree's own private git-dir when linked.
 GIT_DIR=""
 
+# Parent directory of the ORIGINATING repo's own checkout (for the
+# sibling-directory read grant below) -- deliberately NOT derived from
+# $TOPLEVEL. --show-toplevel resolves to the *worktree's* own root when cwd
+# is a linked worktree (confirmed empirically from inside one: this very
+# thread's worktree toplevel is under ~/.herdr/worktrees/chezmoi/..., not
+# ~/.local/share/chezmoi), so a worktree-rooted parent would mean "other
+# worktrees of the same repo" -- useless, and not what "siblings" means
+# here. --git-common-dir, by contrast, is documented and confirmed
+# empirically to always resolve to the MAIN repo's shared .git even from a
+# linked worktree (e.g. ~/.local/share/chezmoi/.git), so its grandparent
+# (dirname twice) is the main checkout's own sibling directory regardless of
+# where this script is actually running from. nono's @git:toplevel-parent
+# token was considered instead, but the profile guide documents it as
+# resolving "the current checkout root" -- the same worktree-local
+# resolution as --show-toplevel, not the common-dir special case -- so it
+# was not used here.
+MAIN_REPO_PARENT=""
+
 TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$TOPLEVEL" ]; then
     IDENTIFIER="$TOPLEVEL"
     GIT_DIR="$(git rev-parse --absolute-git-dir 2>/dev/null || true)"
+    COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    [ -n "$COMMON_DIR" ] && MAIN_REPO_PARENT="$(dirname "$(dirname "$COMMON_DIR")")"
     origin_url="$(git remote get-url origin 2>/dev/null || true)"
     upstream_url="$(git remote get-url upstream 2>/dev/null || true)"
     [ -n "$origin_url" ] && ORIGIN_REPO="$(parse_owner_repo "$origin_url")"
     [ -n "$upstream_url" ] && UPSTREAM_REPO="$(parse_owner_repo "$upstream_url")"
 fi
+
+# Plain-credential file conventions to block within the sibling read grant
+# below. Not an exhaustive secret-scan -- a scoped set of widely-recognized
+# formats: dotenv files, Terraform's tfvars family ("*.tfvars" already
+# matches "*.auto.tfvars" too, since nono's "*" wildcard spans embedded
+# dots; ".tfvars.json" is a distinct suffix so it needs its own entry),
+# default SSH private-key basenames plus common private-key/cert-bundle
+# extensions, cloud-provider credential files, and package-manager/VCS
+# dotfiles that commonly embed tokens (deliberately excludes e.g. .pub keys
+# and general .aws/.kube directory contents other than their credential
+# files, which aren't themselves secret).
+CREDENTIAL_DENY_SUFFIXES='[
+    "**/.env*", "**/*.env",
+    "**/*.tfvars", "**/*.tfvars.json",
+    "**/id_rsa", "**/id_dsa", "**/id_ecdsa", "**/id_ed25519",
+    "**/*.pem", "**/*.key", "**/*.pfx", "**/*.p12",
+    "**/.aws/credentials", "**/.aws/config",
+    "**/.kube/config", "**/*.kubeconfig",
+    "**/.npmrc", "**/.pypirc", "**/.netrc", "**/.git-credentials"
+]'
 
 # Deterministic, not a per-launch temp file: any subdirectory of the same
 # repo (or the same non-repo directory) maps to the same profile name, which
@@ -232,7 +272,10 @@ jq -n \
     --arg git_dir "$GIT_DIR" \
     --arg ssh_key_path "$AGENT_SANDBOX_SSH_KEY_PATH" \
     --arg tmpdir "$TMPDIR" \
+    --arg main_repo_parent "$MAIN_REPO_PARENT" \
+    --argjson credential_deny_suffixes "$CREDENTIAL_DENY_SUFFIXES" \
     '($git_dir | if . == "" then [] else [.] end) as $git_dir_grant |
+    ($main_repo_parent | if . == "" then [] else [.] end) as $siblings_grant |
     {
         extends: "agent-sandbox-base",
         meta: { name: "agent-sandbox-session" },
@@ -295,6 +338,35 @@ jq -n \
                     allow: ["$HOME/.herdr/worktrees"]
                 }
             else {} end
+        ),
+        # Read-only grant for the directories alongside the discovered repo
+        # main checkout (e.g. other projects under ~/.local/share next to
+        # ~/.local/share/chezmoi) -- deliberately broad, requested so a
+        # session can see sibling repos/files on disk, never write-granted.
+        # macOS-only: Landlock (Linux) is a strict allow-list with no
+        # kernel-level deny primitive, so a filesystem.deny pattern that
+        # overlaps a filesystem.read grant is a hard launch error there
+        # (confirmed in nono own profile guide) rather than an enforced
+        # carve-out -- there is no way to express "read this directory
+        # except these credential-shaped files" safely on Linux short of
+        # enumerating every non-credential file, which is not feasible for
+        # an arbitrary sibling directory. Seatbelt (macOS) enforces deny-
+        # within-allow correctly (including for files created after the
+        # sandbox starts), so this profile grants the sibling read there and
+        # grants nothing at all on Linux -- fail-safe, not an oversight.
+        platform_overrides: (
+            if ($siblings_grant | length) == 0 then {} else {
+                macos: {
+                    filesystem: {
+                        read: $siblings_grant,
+                        deny: [
+                            $siblings_grant[0] as $root |
+                            $credential_deny_suffixes[] |
+                            "\($root)/\(.)"
+                        ]
+                    }
+                }
+            } end
         ),
         command_policies: {
             credentials: {
