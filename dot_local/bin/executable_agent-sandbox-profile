@@ -114,6 +114,16 @@ if [ -n "$ORIGIN_REPO" ] || [ -n "$UPSTREAM_REPO" ]; then
             {method: "POST", path: "/repos/\($repo)/pulls"}
         ]')"
     fi
+
+    # Unscoped read: clone/fetch of any OTHER repo over ssh is allowed too,
+    # not just origin/upstream -- deliberate, see this profile's git history
+    # for the tradeoff. No receive-pack equivalent: push stays allowed only
+    # for the origin-repo-scoped rule(s) above, denied everywhere else by
+    # SSH_DEFAULT="deny" (upload-pack and receive-pack are distinct literal
+    # subcommands on the wire, so this can't be smuggled into a push).
+    SSH_ALLOW="$(echo "$SSH_ALLOW" | jq '. + [
+        {argv: {contains: ["git-upload-pack"]}, reason: "read any repo via ssh"}
+    ]')"
 else
     # No repo discovered at all: read-only-everywhere. Push is blocked at
     # the git layer above (GIT_DENY), not here, so ssh needs no restriction.
