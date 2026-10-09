@@ -56,7 +56,31 @@ GIT_DIR=""
 # was not used here.
 MAIN_REPO_PARENT=""
 
+# meta.repo_discovery (threaded into the generated profile below) records
+# which of three outcomes happened here, so a failure is diagnosable from
+# the profile file itself afterwards instead of being silently
+# indistinguishable from the genuine no-repo case. "no_git" (cwd has no
+# .git at all -- e.g. a herdr-projects coordinator's own PROJECT.md folder,
+# the only case this script originally supported) and
+# "git_metadata_present_but_discovery_failed" (cwd clearly has git
+# metadata -- a worktree's .git file or a full repo's .git dir -- yet
+# `git rev-parse --show-toplevel` still failed or returned empty) both fall
+# through to the same unscoped no-repo profile below, but the latter is a
+# meaningfully different, unexpected situation worth surfacing: it's what
+# happened for a real linked worktree with a valid .git file and a full
+# checkout on disk, root cause unconfirmed (see this thread's report). Also
+# printed to stderr immediately, since cs-launch only captures this
+# script's stdout (the profile name) -- the warning reaches the pane
+# directly rather than requiring anyone to know to go look at the profile
+# file after the fact.
+REPO_DISCOVERY="ok"
 TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$TOPLEVEL" ] && [ -e ".git" ]; then
+    REPO_DISCOVERY="git_metadata_present_but_discovery_failed"
+    echo "agent-sandbox-profile: warning: $(pwd) has .git but 'git rev-parse --show-toplevel' failed or returned empty; generating an unscoped no-repo profile (see meta.repo_discovery in the generated profile)" >&2
+elif [ -z "$TOPLEVEL" ]; then
+    REPO_DISCOVERY="no_git"
+fi
 if [ -n "$TOPLEVEL" ]; then
     IDENTIFIER="$TOPLEVEL"
     GIT_DIR="$(git rev-parse --absolute-git-dir 2>/dev/null || true)"
@@ -332,6 +356,7 @@ jq -n \
     --arg main_repo_parent "$MAIN_REPO_PARENT" \
     --argjson coordinator_sibling_parents "$COORDINATOR_SIBLING_PARENTS" \
     --argjson credential_deny_suffixes "$CREDENTIAL_DENY_SUFFIXES" \
+    --arg repo_discovery "$REPO_DISCOVERY" \
     '($git_dir | if . == "" then [] else [.] end) as $git_dir_grant |
     # Single cwd-discovered parent (plain sessions) plus every qualifying
     # parent of a coordinator own PROJECT_REPOS (coordinator sessions) -- the
@@ -342,7 +367,10 @@ jq -n \
     (($main_repo_parent | if . == "" then [] else [.] end) + $coordinator_sibling_parents | unique) as $siblings_grant |
     {
         extends: "agent-sandbox-base",
-        meta: { name: "agent-sandbox-session" },
+        # repo_discovery: "ok" | "no_git" | "git_metadata_present_but_discovery_failed"
+        # -- see the comment above the TOPLEVEL detection above for what each
+        # value means and why it is here.
+        meta: { name: "agent-sandbox-session", repo_discovery: $repo_discovery },
         # leaf_validity governs the per-host cert nono mints to decrypt gh
         # GraphQL/REST calls to api.github.com for the github-pat credential
         # proxy below (phantom GH_TOKEN swapped for the real PAT in-flight).
