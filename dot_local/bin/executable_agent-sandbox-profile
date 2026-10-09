@@ -56,12 +56,14 @@ GIT_DIR=""
 # was not used here.
 MAIN_REPO_PARENT=""
 
-# meta.repo_discovery (threaded into the generated profile below) records
-# which of three outcomes happened here, so a failure is diagnosable from
-# the profile file itself afterwards instead of being silently
-# indistinguishable from the genuine no-repo case. "no_git" (cwd has no
-# .git at all -- e.g. a herdr-projects coordinator's own PROJECT.md folder,
-# the only case this script originally supported) and
+# REPO_DISCOVERY (threaded into the generated profile's meta.description
+# below -- meta is a strict schema with only name/version/description/author,
+# confirmed via `nono profile guide`, so there is no custom meta.* field to
+# add) records which of three outcomes happened here, so a failure is
+# diagnosable from the profile file itself afterwards instead of being
+# silently indistinguishable from the genuine no-repo case. "no_git" (cwd has
+# no .git at all -- e.g. a herdr-projects coordinator's own PROJECT.md
+# folder, the only case this script originally supported) and
 # "git_metadata_present_but_discovery_failed" (cwd clearly has git
 # metadata -- a worktree's .git file or a full repo's .git dir -- yet
 # `git rev-parse --show-toplevel` still failed or returned empty) both fall
@@ -77,7 +79,7 @@ REPO_DISCOVERY="ok"
 TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$TOPLEVEL" ] && [ -e ".git" ]; then
     REPO_DISCOVERY="git_metadata_present_but_discovery_failed"
-    echo "agent-sandbox-profile: warning: $(pwd) has .git but 'git rev-parse --show-toplevel' failed or returned empty; generating an unscoped no-repo profile (see meta.repo_discovery in the generated profile)" >&2
+    echo "agent-sandbox-profile: warning: $(pwd) has .git but 'git rev-parse --show-toplevel' failed or returned empty; generating an unscoped no-repo profile (see meta.description in the generated profile)" >&2
 elif [ -z "$TOPLEVEL" ]; then
     REPO_DISCOVERY="no_git"
 fi
@@ -367,10 +369,15 @@ jq -n \
     (($main_repo_parent | if . == "" then [] else [.] end) + $coordinator_sibling_parents | unique) as $siblings_grant |
     {
         extends: "agent-sandbox-base",
-        # repo_discovery: "ok" | "no_git" | "git_metadata_present_but_discovery_failed"
-        # -- see the comment above the TOPLEVEL detection above for what each
-        # value means and why it is here.
-        meta: { name: "agent-sandbox-session", repo_discovery: $repo_discovery },
+        # description holds "repo_discovery: ok | no_git |
+        # git_metadata_present_but_discovery_failed" -- meta is a strict
+        # schema (name/version/description/author only, confirmed via `nono
+        # profile guide`: an unrecognised meta field is a hard profile parse
+        # error, not an ignored extra key), so description is the one
+        # free-text field available to carry this. See the comment above the
+        # TOPLEVEL detection above for what each value means and why it is
+        # here.
+        meta: { name: "agent-sandbox-session", description: "repo_discovery: \($repo_discovery)" },
         # leaf_validity governs the per-host cert nono mints to decrypt gh
         # GraphQL/REST calls to api.github.com for the github-pat credential
         # proxy below (phantom GH_TOKEN swapped for the real PAT in-flight).
