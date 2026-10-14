@@ -596,6 +596,32 @@ jq -n \
                         }
                     }
                 },
+                # Hard block, no allow rules at all: xattr is the standard
+                # way to strip com.apple.quarantine from a downloaded file,
+                # which otherwise gates it behind a Gatekeeper warning when
+                # opened via LaunchServices (relevant here since this
+                # profile can run with --allow-launch-services active).
+                # Narrow: confirmed live that a curl-downloaded file carries
+                # no quarantine attribute in the first place, and that a
+                # direct shell exec never consults Gatekeeper/quarantine
+                # regardless of xattr state, so this closes one real but
+                # secondary path (open-via-LaunchServices), not direct
+                # binary execution from a writable directory -- nono has no
+                # way to restrict that while command mediation (git/gh/ssh
+                # below) is active: command mediations own "outer" process
+                # sandbox deliberately allows ordinary exec by design (see
+                # add_outer_process_exec_gate in nono own source), overriding
+                # any session-level deny of process-exec* a profile sets. No
+                # legitimate use of xattr in an agent session outweighs
+                # closing it outright regardless.
+                xattr: {
+                    from: {
+                        session: {
+                            sandbox: {},
+                            invocation_policy: { default: "deny" }
+                        }
+                    }
+                },
                 gh: {
                     can_use: ["git"],
                     from: {
