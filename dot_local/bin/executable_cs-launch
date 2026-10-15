@@ -109,7 +109,4 @@ else
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 
-# The VM+proxy boundary is the containment, not Claude Code's own
-# per-action prompts -- same reasoning herdr-projects already applies to
-# thread/coordinator "auto" mode (see jorrite/agent-sandbox's plan).
-exec msb run "${MSB_ARGS[@]}" "$IMAGE" -- claude --dangerously-skip-permissions "$@"
+exec msb run "${MSB_ARGS[@]}" "$IMAGE" -- claude "$@"

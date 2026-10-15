@@ -78,7 +78,7 @@ normal Claude Code prompt, type /exit -- that hands control back to this
 script, which will snapshot the logged-in state for every future launch.
 
 EOF
-    msb exec -u ubuntu -t "$NEW_SANDBOX" -- claude --dangerously-skip-permissions
+    msb exec -u ubuntu -t "$NEW_SANDBOX" -- claude
 fi
 
 spin "Snapshotting..." msb snap create "$SNAPSHOT_NAME" --sandbox "$NEW_SANDBOX" --group "$SNAPSHOT_GROUP"
