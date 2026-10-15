@@ -105,6 +105,15 @@ if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
     )
 fi
 
+# herdr-projects' own home folder -- both a coordinator and a worker read
+# from it directly (a task's claude invocation is handed --settings and
+# --append-system-prompt-file files under here, confirmed live) and write
+# to it directly (a task's closing note, per herdr-projects' own docs: "the
+# agent is told the full path"), not through any CLI/socket call. Whichever
+# machine it's really on (HERDR_PROJECTS_HOME can move it).
+HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
+[ -d "$HERDR_PROJECTS_HOME" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME:$HERDR_PROJECTS_HOME")
+
 if [ "$IS_COORDINATOR" = true ]; then
     WORKDIR="$(pwd)"
     MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
@@ -125,6 +134,12 @@ if [ "$IS_COORDINATOR" = true ]; then
 else
     WORKDIR="$TOPLEVEL"
     [ -n "$TOPLEVEL" ] && MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
+    # A linked worktree's main repo (see agent-sandbox-profile) -- skip when
+    # it's the same path as $TOPLEVEL (an ordinary, non-worktree checkout)
+    # to avoid mounting the same host path twice.
+    if [ -n "$MAIN_REPO_PATH" ] && [ "$MAIN_REPO_PATH" != "$TOPLEVEL" ]; then
+        MSB_ARGS+=(--mount-dir "$MAIN_REPO_PATH:$MAIN_REPO_PATH")
+    fi
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 
