@@ -1,0 +1,6 @@
+#!/bin/bash
+# Wins over mise's claude-code shim (excluded via shims.exclude) so this
+# runs for any caller that resolves claude via PATH, not just an
+# interactive fish shell -- herdr-projects spawns it directly, bypassing
+# the fish function layer entirely.
+exec cs-launch "$@"
