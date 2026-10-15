@@ -15,6 +15,15 @@ eval "$(agent-sandbox-profile)"
 GITHUB_TOKEN="$(gh auth token)"
 GIT_REAL_TOKEN="x-access-token:$GITHUB_TOKEN"
 
+# GHCR only accepts a classic PAT (confirmed against GitHub's own current
+# docs: no fine-grained option), unlike everything else here -- gh auth
+# token's own OAuth scopes don't cover package reads at all. Consumed by
+# msb itself at pull time (dot_config/microsandbox/config.json's
+# password_env), not passed into the guest -- this authenticates the
+# *pull*, not anything running inside it.
+export MSB_GHCR_TOKEN
+MSB_GHCR_TOKEN="$(op read "op://afcfz2u36qbb4w5iikx4aol2z4/2qjn4qqhkd47suuubzm5zhvslq/6m3ew3245raxoyrnctwfm5pnii")"
+
 # Dedicated, passphrase-less signing-only key -- no per-operation decrypt:
 # the image's own in-guest ssh-agent loads it once at container start and
 # shreds the raw material immediately after, so there's nothing left for

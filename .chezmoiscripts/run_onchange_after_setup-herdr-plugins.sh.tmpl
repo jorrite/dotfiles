@@ -13,8 +13,13 @@ if ! command -v herdr >/dev/null 2>&1; then
 fi
 
 {{ range .herdr_plugins -}}
+{{ if kindIs "map" . -}}
+log_substep "Installing {{ .source }} ({{ .ref }})..."
+herdr plugin install {{ .source }} --ref {{ .ref }} --yes || log_warning "Failed to install {{ .source }}"
+{{ else -}}
 log_substep "Installing {{ . }}..."
 herdr plugin install {{ . }} --yes || log_warning "Failed to install {{ . }}"
+{{ end -}}
 {{ end -}}
 
 log_success "Herdr plugins up to date"

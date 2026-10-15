@@ -20,7 +20,23 @@ IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
 SNAPSHOT_GROUP="agent-sandbox"
 SNAPSHOT_NAME="ready"
 
-msb image pull "$IMAGE" --force
+# GHCR only accepts a classic PAT (confirmed against GitHub's own current
+# docs: no fine-grained option).
+GHCR_TOKEN="$(op read "op://afcfz2u36qbb4w5iikx4aol2z4/2qjn4qqhkd47suuubzm5zhvslq/6m3ew3245raxoyrnctwfm5pnii")"
+
+# `msb image pull` directly against this image fails outright -- confirmed
+# live, reproducibly, "error decoding response body" specifically on this
+# image's size/layer structure (a small test image pulls fine, isolating
+# it from the auth/config mechanism, which works correctly) -- while
+# plain, unrelated to this image specifically, not something fixable from
+# here. crane (google/go-containerregistry, daemon-less, no VM needed)
+# pulls the exact same image with no issue; `msb image load` already reads
+# the resulting tarball correctly, same format `docker save` produces.
+PULL_TAR="$(mktemp)"
+echo "$GHCR_TOKEN" | crane auth login ghcr.io -u jorrite --password-stdin
+crane pull --platform linux/arm64 "$IMAGE" "$PULL_TAR"
+msb image load -i "$PULL_TAR" -t "$IMAGE"
+rm -f "$PULL_TAR"
 
 NEW_SANDBOX="agent-sandbox-refresh-$$"
 msb create --name "$NEW_SANDBOX" "$IMAGE"

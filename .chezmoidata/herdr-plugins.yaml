@@ -1,2 +1,3 @@
 herdr_plugins:
-  - eliasstravik/herdr-projects
+  - source: eliasstravik/herdr-projects
+    ref: v0.2.34
