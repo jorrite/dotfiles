@@ -1,0 +1,42 @@
+#!/bin/bash
+# Pulls the latest jorrite/agent-sandbox image, carries over Claude Code's
+# existing authenticated session from the previous snapshot (no
+# interactive login needed on every image bump), and re-snapshots. A
+# snapshot is tied to one specific image's layers -- there's no "rebase
+# this snapshot onto a new base image" operation -- so this has to redo
+# the snapshot from scratch each time, just without redoing the OAuth
+# login along with it.
+#
+# NOT YET LIVE-VERIFIED: whether ~/.claude is really everything Claude
+# Code's own session needs (confirmed only that .claude/settings.json and
+# .claude/skills/ exist and get populated, via herdr-projects' own
+# `configure` step -- never confirmed this is the *complete* set an
+# authenticated session depends on, nor the exact credentials file within
+# it). Run this once by hand and confirm the resulting snapshot is
+# actually still logged in before trusting it unattended.
+set -euo pipefail
+
+IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
+SNAPSHOT_GROUP="agent-sandbox"
+SNAPSHOT_NAME="ready"
+
+msb image pull "$IMAGE" --force
+
+NEW_SANDBOX="agent-sandbox-refresh-$$"
+msb create --name "$NEW_SANDBOX" "$IMAGE"
+
+if msb snap list 2>/dev/null | grep -q "^${SNAPSHOT_GROUP}:${SNAPSHOT_NAME}\b"; then
+    OLD_SANDBOX="agent-sandbox-refresh-old-$$"
+    msb snap restore "${SNAPSHOT_GROUP}:${SNAPSHOT_NAME}" --name "$OLD_SANDBOX"
+    msb exec -u ubuntu "$OLD_SANDBOX" -- tar -C /home/ubuntu -czf /tmp/claude-state.tar.gz .claude
+    msb exec -u ubuntu "$OLD_SANDBOX" -- cat /tmp/claude-state.tar.gz \
+        | msb exec -u ubuntu "$NEW_SANDBOX" -- tar -C /home/ubuntu -xzf -
+    msb rm -f "$OLD_SANDBOX"
+    echo "agent-sandbox-refresh: carried over the existing login, not a fresh one" >&2
+else
+    echo "agent-sandbox-refresh: no prior snapshot found -- log in now:" >&2
+    msb exec -u ubuntu -t "$NEW_SANDBOX" -- claude
+fi
+
+msb snap create "$SNAPSHOT_NAME" --sandbox "$NEW_SANDBOX"
+msb rm -f "$NEW_SANDBOX"

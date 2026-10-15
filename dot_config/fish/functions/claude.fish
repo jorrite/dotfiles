@@ -1,12 +1,7 @@
-# Inside any herdr pane ($HERDR_ENV is set there automatically, including
-# panes herdr's own daemon spawns for herdr-projects coordinators/worker
-# threads), always run claude sandboxed via cs-launch instead of the real
-# binary -- there is no unsandboxed escape hatch for `claude` inside herdr.
-# Outside herdr, this passes straight through unchanged.
+# Always run claude sandboxed via cs-launch -- inside a herdr pane
+# (coordinator or worker thread) and from a plain interactive terminal
+# alike. No unsandboxed `claude` at all; `claude-yolo` is the deliberate,
+# clearly-named escape hatch for when that's actually wanted.
 function claude
-    if set -q HERDR_ENV
-        cs-launch $argv
-    else
-        command claude $argv
-    end
+    cs-launch $argv
 end
