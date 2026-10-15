@@ -20,9 +20,16 @@
 .config/fish/functions/claude.fish
 
 # Pre-msb-migration nono profiles: nono no longer sandboxes the host
-# process directly for `cs`, it moved entirely inside the guest.
+# process directly for `cs`, it moved entirely inside the guest, so these
+# generated/retired profiles are dead. Scoped to just the profiles -- not
+# the rest of ~/.config/nono (packages/, pack-update-hints.json,
+# profile-drafts/) -- since those are nono's own package state, not
+# something chezmoi ever generated; blanket-removing the whole directory
+# every apply would fight nono's own management of it.
 .config/nono/profiles/claude-code-base.json
 .config/nono/profiles/claude-code.json
+.config/nono/profiles/agent-sandbox-base.json
+.config/nono/profiles/agent-sandbox-session-*.json
 
 # Git reads both $XDG_CONFIG_HOME/git/config and ~/.gitconfig, with
 # ~/.gitconfig winning on any overlapping key (confirmed via `git config
