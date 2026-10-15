@@ -98,13 +98,6 @@ fi
 # VM, so there's nothing for one session's vsock route to collide with.
 HERDR_VSOCK_PORT=54321
 if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
-    # HERDR_BIN_PATH is never forwarded: it's the host's own (macOS) path to
-    # the herdr binary, meaningless inside this Linux guest. herdr-projects'
-    # own resolution (paths.rs::herdr_bin) prefers HERDR_BIN_PATH over
-    # "herdr" on PATH when set, even to a value that doesn't exist -- the
-    # image already installs herdr via mise with its shims on PATH, so
-    # leaving this unset lets that fallback resolve correctly instead of a
-    # dead host path silently making every herdr call fail as "unreachable".
     MSB_ARGS+=(
         -e "HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH"
         -e "HERDR_PANE_ID=${HERDR_PANE_ID:-}"
