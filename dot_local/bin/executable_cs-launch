@@ -39,6 +39,10 @@ SIGNING_KEY_PUBLIC_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pab
 GO_CACHE_DIR="$HOME/.cache/agent-sandbox/go"
 mkdir -p "$GO_CACHE_DIR/mod" "$GO_CACHE_DIR/build"
 
+# A dedicated msb named volume, not the host's own ~/.claude -- per
+# Claude Code's devcontainer docs, this is the supported way to persist
+# a login across recreated containers without mounting a host secret.
+# CLAUDE_CONFIG_DIR points .claude.json into the same volume too.
 MSB_ARGS=(-u ubuntu
     -e "GITHUB_TOKEN=$GITHUB_TOKEN"
     -e "GIT_REAL_TOKEN=$GIT_REAL_TOKEN"
@@ -46,6 +50,8 @@ MSB_ARGS=(-u ubuntu
     -e "PR_ONLY_REPOS=$PR_ONLY_REPOS"
     -e "GOMODCACHE=/home/ubuntu/.cache/go/mod"
     -e "GOCACHE=/home/ubuntu/.cache/go/build"
+    -e "CLAUDE_CONFIG_DIR=/home/ubuntu/.claude"
+    --mount-named "agent-sandbox-claude-config:/home/ubuntu/.claude"
     --mount-dir "$GO_CACHE_DIR/mod:/home/ubuntu/.cache/go/mod"
     --mount-dir "$GO_CACHE_DIR/build:/home/ubuntu/.cache/go/build"
 )

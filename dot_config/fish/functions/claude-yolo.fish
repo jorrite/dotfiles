@@ -1,11 +1,7 @@
-# Deliberate, clearly-named escape hatch: runs the real, unsandboxed
-# claude binary directly, bypassing cs-launch entirely. `claude` itself
-# always sandboxes now, with no exception for a plain interactive
-# terminal -- this exists for when that's a real, considered choice, not
-# the default.
-#
-# Resolved via mise rather than a bare "claude" on PATH: that would just
-# re-resolve back to this shell's own `claude` function and recurse.
+# Escape hatch: runs the real, unsandboxed claude binary directly.
+# Resolved via mise, not a bare "claude", to avoid recursing into this
+# shell's own `claude` function.
 function claude-yolo
-    command (mise which claude) $argv
+    set -l claude_bin (mise which claude)
+    command $claude_bin $argv
 end
