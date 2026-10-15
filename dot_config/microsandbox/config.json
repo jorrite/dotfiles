@@ -1,0 +1,12 @@
+{
+  "registries": {
+    "hosts": {
+      "ghcr.io": {
+        "auth": {
+          "username": "jorrite",
+          "password_env": "MSB_GHCR_TOKEN"
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,10 @@
 
 [settings]
 
+# Lets dot_local/bin's own claude wrapper win over the mise shim.
+[settings.shims]
+exclude = ["claude"]
+
 [settings.npm]
 package_manager = "bun"
 

@@ -1,24 +1,92 @@
 #!/bin/bash
-# cs = "claude sandbox": thin wrapper that generates a scoped git/gh
-# sandbox profile for the current repo (via agent-sandbox-profile, which
-# is agent-agnostic) and mixes it into Claude Code's own nono profile.
+# cs = "claude sandbox": scopes the current session (or herdr-projects
+# coordinator/thread) to its own repo(s) via agent-sandbox-profile, then
+# launches Claude Code inside an msb-sandboxed VM instead of the real
+# binary. nono no longer sandboxes the host process directly -- the whole
+# exec-containment job moved to msb's VM boundary, with nono's credential
+# scoping now living entirely inside the guest (jorrite/agent-sandbox's
+# own image, not a profile authored here).
 set -euo pipefail
 
-source agent-sandbox-ssh-setup
+IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
 
-PROFILE_NAME="$(agent-sandbox-profile)"
+# msb's own implicit pull is broken for this image (agent-sandbox-pull's
+# own comment has the details), so pull explicitly when missing and
+# disable msb's fallback entirely below. Run agent-sandbox-pull by hand
+# to force a refresh of an already-cached image.
+msb image list 2>/dev/null | grep -qF "$IMAGE" || agent-sandbox-pull
 
-# Resolved via mise rather than a bare "claude" on PATH: the fish `claude`
-# function (dot_config/fish/functions/claude.fish) redirects to this script
-# whenever $HERDR_ENV is set, so a bare "claude" here could re-resolve back
-# to that same function/shim and recurse.
-REAL_CLAUDE="$(mise which claude)"
+eval "$(agent-sandbox-profile)"
 
-# nono's own startup banner sits in front of claude's screen output, which
-# defeats herdr's screen-pattern agent detection entirely (confirmed: times
-# out, never detected -- the same failure as a wrapper foreground process
-# hiding the real agent, per herdr's own sandbox-wrapper docs). HERDR_AGENT
-# tells herdr directly what's running instead of relying on screen content.
+GITHUB_TOKEN="$(gh auth token)"
+GIT_REAL_TOKEN="x-access-token:$GITHUB_TOKEN"
+
+# GHCR only accepts a classic PAT (confirmed against GitHub's own current
+# docs: no fine-grained option), unlike everything else here -- gh auth
+# token's own OAuth scopes don't cover package reads at all. Consumed by
+# msb itself at pull time (dot_config/microsandbox/config.json's
+# password_env), not passed into the guest -- this authenticates the
+# *pull*, not anything running inside it.
+export MSB_GHCR_TOKEN
+MSB_GHCR_TOKEN="$(op read "op://afcfz2u36qbb4w5iikx4aol2z4/2qjn4qqhkd47suuubzm5zhvslq/6m3ew3245raxoyrnctwfm5pnii")"
+
+# Dedicated, passphrase-less signing-only key -- no per-operation decrypt:
+# the image's own in-guest ssh-agent loads it once at container start and
+# shreds the raw material immediately after, so there's nothing left for
+# an ambient agent or a plain checked-in file to leak.
+SIGNING_KEY_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pabtxxz4/private_key"
+SIGNING_KEY_PUBLIC_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pabtxxz4/public_key"
+
+# Shared across every session, not per-launch: this is what makes a Go
+# build/module cache actually pay off across separate, independently-
+# destroyed ephemeral sandboxes instead of rebuilding from scratch every
+# time -- same persistent-host-directory-plus-mount shape proven live,
+# not snapshot-based.
+GO_CACHE_DIR="$HOME/.cache/agent-sandbox/go"
+mkdir -p "$GO_CACHE_DIR/mod" "$GO_CACHE_DIR/build"
+
+# A dedicated msb named volume, not the host's own ~/.claude -- per
+# Claude Code's devcontainer docs, this is the supported way to persist
+# a login across recreated containers without mounting a host secret.
+# CLAUDE_CONFIG_DIR points .claude.json into the same volume too.
+# Host RAM tracks actual guest usage, not this ceiling (confirmed live:
+# idle sandboxes at the 512M default used ~290M real RSS), so a
+# generous cap here costs nothing at idle while covering real spikes --
+# a single moderately heavy task measured ~590M RSS and ~70% of one
+# vCPU.
+MSB_ARGS=(-u ubuntu
+    -c 2
+    -m 2G
+    --max-memory 4G
+    -e "GITHUB_TOKEN=$GITHUB_TOKEN"
+    -e "GIT_REAL_TOKEN=$GIT_REAL_TOKEN"
+    -e "WRITE_REPOS=$WRITE_REPOS"
+    -e "PR_ONLY_REPOS=$PR_ONLY_REPOS"
+    -e "GOMODCACHE=/home/ubuntu/.cache/go/mod"
+    -e "GOCACHE=/home/ubuntu/.cache/go/build"
+    -e "CLAUDE_CONFIG_DIR=/home/ubuntu/.claude"
+    --mount-named "agent-sandbox-claude-config:/home/ubuntu/.claude"
+    --mount-dir "$GO_CACHE_DIR/mod:/home/ubuntu/.cache/go/mod"
+    --mount-dir "$GO_CACHE_DIR/build:/home/ubuntu/.cache/go/build"
+)
+
+if [ -n "$SIGNING_KEY_OP_REF" ]; then
+    MSB_ARGS+=(
+        -e "SIGNING_KEY=$(op read "$SIGNING_KEY_OP_REF" | base64)"
+        -e "SIGNING_KEY_PUBLIC=$(op read "$SIGNING_KEY_PUBLIC_OP_REF")"
+    )
+fi
+
+GIT_NAME="$(git config --get user.name 2>/dev/null || true)"
+GIT_EMAIL="$(git config --get user.email 2>/dev/null || true)"
+[ -n "$GIT_NAME" ] && MSB_ARGS+=(-e "GIT_AUTHOR_NAME=$GIT_NAME" -e "GIT_COMMITTER_NAME=$GIT_NAME")
+[ -n "$GIT_EMAIL" ] && MSB_ARGS+=(-e "GIT_AUTHOR_EMAIL=$GIT_EMAIL" -e "GIT_COMMITTER_EMAIL=$GIT_EMAIL")
+
+# nono's own startup banner used to sit in front of claude's screen output,
+# defeating herdr's screen-pattern agent detection entirely (confirmed:
+# timed out, never detected). HERDR_AGENT tells herdr directly what's
+# running instead of relying on screen content -- still true with msb's
+# own boot/proxy-setup output sitting in front of claude the same way.
 # Only set inside an actual herdr pane ($HERDR_ENV) -- cs-launch also runs
 # standalone outside herdr, where the hint means nothing and herdr's own
 # docs caution against exporting it unconditionally.
@@ -26,7 +94,39 @@ if [ -n "${HERDR_ENV:-}" ]; then
     export HERDR_AGENT=claude
 fi
 
-# Not exec'd: this process needs to stay alive after nono exits so the
-# trap registered by agent-sandbox-ssh-setup actually fires and deletes
-# the ephemeral ssh key.
-nono run --profile nolabs-ai/claude --extends "$PROFILE_NAME" --allow-launch-services --allow-cwd -- "$REAL_CLAUDE" "$@"
+# Fixed port, no negotiation needed: every session is its own independent
+# VM, so there's nothing for one session's vsock route to collide with.
+HERDR_VSOCK_PORT=54321
+if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
+    MSB_ARGS+=(
+        -e "HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH"
+        -e "HERDR_BIN_PATH=${HERDR_BIN_PATH:-}"
+        -e "HERDR_PANE_ID=${HERDR_PANE_ID:-}"
+        --vsock "$HERDR_SOCKET_PATH:$HERDR_VSOCK_PORT"
+    )
+fi
+
+if [ "$IS_COORDINATOR" = true ]; then
+    WORKDIR="$(pwd)"
+    MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
+    if [ -n "$PROJECT_REPO_PATHS" ]; then
+        IFS=',' read -ra repo_paths <<< "$PROJECT_REPO_PATHS"
+        for repo_path in "${repo_paths[@]}"; do
+            MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
+        done
+    fi
+    # herdr's own fixed worktree root (default_config: [worktrees]
+    # directory) -- a coordinator creates threads here via `git worktree
+    # add`, a purely local git operation; mounted so a later thread's own
+    # separate msb run can mount the exact same host path.
+    WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
+        | sed -E 's/^directory = "(.*)"$/\1/')"
+    WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
+    [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
+else
+    WORKDIR="$TOPLEVEL"
+    [ -n "$TOPLEVEL" ] && MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
+fi
+[ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
+
+exec msb run --pull never "${MSB_ARGS[@]}" "$IMAGE" -- claude "$@"
