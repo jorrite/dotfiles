@@ -49,7 +49,15 @@ mkdir -p "$GO_CACHE_DIR/mod" "$GO_CACHE_DIR/build"
 # Claude Code's devcontainer docs, this is the supported way to persist
 # a login across recreated containers without mounting a host secret.
 # CLAUDE_CONFIG_DIR points .claude.json into the same volume too.
+# Host RAM tracks actual guest usage, not this ceiling (confirmed live:
+# idle sandboxes at the 512M default used ~290M real RSS), so a
+# generous cap here costs nothing at idle while covering real spikes --
+# a single moderately heavy task measured ~590M RSS and ~70% of one
+# vCPU.
 MSB_ARGS=(-u ubuntu
+    -c 2
+    -m 2G
+    --max-memory 4G
     -e "GITHUB_TOKEN=$GITHUB_TOKEN"
     -e "GIT_REAL_TOKEN=$GIT_REAL_TOKEN"
     -e "WRITE_REPOS=$WRITE_REPOS"
