@@ -1,0 +1,42 @@
+# Targets removed from the source state over time whose destination files
+# were never cleaned up -- chezmoi apply only ensures what's in the current
+# source state, it does not delete a target just because its source was
+# removed. Entries are destination-relative, like a `chezmoi apply <target>`
+# argument; globs are supported.
+
+# Pre-XDG 1Password socket symlink -- superseded by
+# dot_config/1password/symlink_agent.sock.tmpl, same target either way.
+.1password/agent.sock
+
+# Only ever existed on an abandoned, unmerged branch, applied once by hand.
+# Redundant with Homebrew's own mise formula, which auto-activates fish via
+# its own vendor_conf.d snippet regardless of this repo.
+.config/fish/conf.d/mise.fish
+
+# Superseded by dot_local/bin/executable_claude (a plain PATH wrapper into
+# cs-launch) when claude's sandboxing moved off nono; fish functions win
+# over PATH for interactive typing, so this stayed the operative mechanism
+# even though its source was deleted.
+.config/fish/functions/claude.fish
+
+# Pre-msb-migration nono profiles: nono no longer sandboxes the host
+# process directly for `cs`, it moved entirely inside the guest.
+.config/nono/profiles/claude-code-base.json
+.config/nono/profiles/claude-code.json
+
+# Git reads both $XDG_CONFIG_HOME/git/config and ~/.gitconfig, with
+# ~/.gitconfig winning on any overlapping key (confirmed via `git config
+# --show-origin`) -- a silent-drift trap against dot_config/git/config.tmpl,
+# which is the one chezmoi actually keeps current.
+.gitconfig
+
+# Retired when the agent-sandbox image's own in-guest ssh-agent started
+# loading a passphrase-less signing key at container start, removing the
+# need for a per-operation decrypt dance from the host.
+.local/bin/agent-sandbox-ssh-askpass
+.local/bin/agent-sandbox-ssh-setup
+
+# herdr-projects 1.0 has no needs-you-style polling action to indirect
+# through at all; status now comes from herdr core's own
+# pane.agent_status_changed events.
+.local/bin/herdr-projects-status
