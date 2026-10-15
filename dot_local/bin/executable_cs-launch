@@ -10,6 +10,12 @@ set -euo pipefail
 
 IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
 
+# msb's own implicit pull is broken for this image (agent-sandbox-pull's
+# own comment has the details), so pull explicitly when missing and
+# disable msb's fallback entirely below. Run agent-sandbox-pull by hand
+# to force a refresh of an already-cached image.
+msb image list 2>/dev/null | grep -qF "$IMAGE" || agent-sandbox-pull
+
 eval "$(agent-sandbox-profile)"
 
 GITHUB_TOKEN="$(gh auth token)"
@@ -115,4 +121,4 @@ else
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 
-exec msb run "${MSB_ARGS[@]}" "$IMAGE" -- claude "$@"
+exec msb run --pull never "${MSB_ARGS[@]}" "$IMAGE" -- claude "$@"

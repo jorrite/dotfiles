@@ -1,0 +1,16 @@
+#!/bin/bash
+# `msb image pull` fails outright on the real agent-sandbox image
+# ("error decoding response body", isolated from the GHCR auth/config
+# mechanism itself -- confirmed live). crane pulls the same image fine;
+# `msb image load` reads the resulting tarball, same format `docker
+# save` produces.
+set -euo pipefail
+
+IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
+
+GHCR_TOKEN="$(op read "op://afcfz2u36qbb4w5iikx4aol2z4/2qjn4qqhkd47suuubzm5zhvslq/6m3ew3245raxoyrnctwfm5pnii")"
+PULL_TAR="$(mktemp)"
+echo "$GHCR_TOKEN" | crane auth login ghcr.io -u jorrite --password-stdin >/dev/null
+crane pull --platform linux/arm64 "$IMAGE" "$PULL_TAR"
+msb image load -i "$PULL_TAR" -t "$IMAGE"
+rm -f "$PULL_TAR"
