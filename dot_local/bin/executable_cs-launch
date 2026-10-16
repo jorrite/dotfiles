@@ -123,13 +123,14 @@ fi
 # herdr-projects' own AGENTS.md hardcodes that exact host path and expects
 # it to just run, it's not something we get to rewrite.
 #
-# Scoped to just these two subdirectories, not the whole ~/.herdr-projects
-# tree: data/bin and settings/ hold a platform-specific launcher (a macOS
-# binary on the host) and its own written-in path, which the image needs
-# its own separate Linux copies of instead.
+# Scoped to just these subdirectories, not the whole ~/.herdr-projects
+# tree: data/bin holds a platform-specific launcher (a macOS binary on the
+# host), which the image needs its own separate Linux copy of instead.
+# settings/ (reviewer.agent, repo keys, ...) is plain JSON, no path of any
+# kind in it -- confirmed by reading it -- so it's mounted the same way.
 HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
 GUEST_HERDR_PROJECTS_HOME="/home/ubuntu/.herdr-projects"
-for dir in data/tasks data/coordinator; do
+for dir in data/tasks data/coordinator settings; do
     [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$GUEST_HERDR_PROJECTS_HOME/$dir")
 done
 MSB_ARGS+=(-e "HERDR_PROJECTS_HOME=$HERDR_PROJECTS_HOME")
