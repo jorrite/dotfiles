@@ -18,6 +18,7 @@ msb image list 2>/dev/null | grep -qF "$IMAGE" || agent-sandbox-pull
 
 eval "$(agent-sandbox-profile)"
 
+export GITHUB_TOKEN GIT_REAL_TOKEN
 GITHUB_TOKEN="$(gh auth token)"
 GIT_REAL_TOKEN="x-access-token:$GITHUB_TOKEN"
 
@@ -58,8 +59,8 @@ MSB_ARGS=(-u ubuntu
     -c 2
     -m 2G
     --max-memory 4G
-    -e "GITHUB_TOKEN=$GITHUB_TOKEN"
-    -e "GIT_REAL_TOKEN=$GIT_REAL_TOKEN"
+    -e "GITHUB_TOKEN"
+    -e "GIT_REAL_TOKEN"
     -e "WRITE_REPOS=$WRITE_REPOS"
     -e "PR_ONLY_REPOS=$PR_ONLY_REPOS"
     -e "GOMODCACHE=/home/ubuntu/.cache/go/mod"
@@ -71,10 +72,10 @@ MSB_ARGS=(-u ubuntu
 )
 
 if [ -n "$SIGNING_KEY_OP_REF" ]; then
-    MSB_ARGS+=(
-        -e "SIGNING_KEY=$(op read "$SIGNING_KEY_OP_REF" | base64)"
-        -e "SIGNING_KEY_PUBLIC=$(op read "$SIGNING_KEY_PUBLIC_OP_REF")"
-    )
+    export SIGNING_KEY SIGNING_KEY_PUBLIC
+    SIGNING_KEY="$(op read "$SIGNING_KEY_OP_REF" | base64)"
+    SIGNING_KEY_PUBLIC="$(op read "$SIGNING_KEY_PUBLIC_OP_REF")"
+    MSB_ARGS+=(-e "SIGNING_KEY" -e "SIGNING_KEY_PUBLIC")
 fi
 
 GIT_NAME="$(git config --get user.name 2>/dev/null || true)"
