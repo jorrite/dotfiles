@@ -133,6 +133,12 @@ GUEST_HERDR_PROJECTS_HOME="/home/ubuntu/.herdr-projects"
 for dir in data/tasks data/coordinator settings; do
     [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$GUEST_HERDR_PROJECTS_HOME/$dir")
 done
+# data/repos.json (which repo each task belongs to) is needed by every
+# session, not just the Coordinator's -- a worker's own end-of-turn sync
+# step reads it too, confirmed live: without it a worker reports "this
+# task is in no repo" and fails syncing main.
+REPOS_JSON="$HERDR_PROJECTS_HOME/data/repos.json"
+[ -f "$REPOS_JSON" ] && MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
 MSB_ARGS+=(-e "HERDR_PROJECTS_HOME=$HERDR_PROJECTS_HOME")
 
 if [ -n "$TOPLEVEL" ]; then
@@ -154,9 +160,7 @@ else
     case "$WORKDIR" in
         "$HERDR_PROJECTS_HOME"/*)
             WORKDIR="$GUEST_HERDR_PROJECTS_HOME${WORKDIR#"$HERDR_PROJECTS_HOME"}"
-            REPOS_JSON="$HERDR_PROJECTS_HOME/data/repos.json"
             if [ -f "$REPOS_JSON" ]; then
-                MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
                 while IFS= read -r repo_path; do
                     [ -n "$repo_path" ] && [ -d "$repo_path/.git" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
                 done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
