@@ -105,41 +105,39 @@ if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
     )
 fi
 
-# herdr-projects' own home folder -- both a coordinator and a worker read
-# from it directly (a task's claude invocation is handed --settings and
-# --append-system-prompt-file files under here, confirmed live) and write
-# to it directly (a task's closing note, per herdr-projects' own docs: "the
-# agent is told the full path"), not through any CLI/socket call. Whichever
-# machine it's really on (HERDR_PROJECTS_HOME can move it).
+# herdr-projects' own data -- a coordinator's own chat folder and a task's
+# own folder, which claude is handed as --settings/--append-system-prompt-
+# file files under (confirmed live) and where a task's agent is told to
+# write its closing note directly (herdr-projects' own docs: "the agent is
+# told the full path"), not through any CLI/socket call. Scoped to these
+# two subdirectories, NOT the whole ~/.herdr-projects tree: data/bin holds
+# a platform-specific launcher (a macOS binary on the host), so sharing it
+# would stop the guest from ever having its own working Linux one there --
+# confirmed live: a Coordinator running in this sandbox got exit 127
+# running it. settings/ is deliberately left off too, for the same
+# platform-launcher reason (herdr-projects writes its own path into it).
 HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
-[ -d "$HERDR_PROJECTS_HOME" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME:$HERDR_PROJECTS_HOME")
+for dir in data/tasks data/coordinator; do
+    [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$HERDR_PROJECTS_HOME/$dir")
+done
 
-if [ "$IS_COORDINATOR" = true ]; then
-    WORKDIR="$(pwd)"
-    MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
-    if [ -n "$PROJECT_REPO_PATHS" ]; then
-        IFS=',' read -ra repo_paths <<< "$PROJECT_REPO_PATHS"
-        for repo_path in "${repo_paths[@]}"; do
-            MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
-        done
-    fi
-    # herdr's own fixed worktree root (default_config: [worktrees]
-    # directory) -- a coordinator creates threads here via `git worktree
-    # add`, a purely local git operation; mounted so a later thread's own
-    # separate msb run can mount the exact same host path.
-    WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
-        | sed -E 's/^directory = "(.*)"$/\1/')"
-    WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
-    [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
-else
+if [ -n "$TOPLEVEL" ]; then
     WORKDIR="$TOPLEVEL"
-    [ -n "$TOPLEVEL" ] && MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
+    MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
     # A linked worktree's main repo (see agent-sandbox-profile) -- skip when
     # it's the same path as $TOPLEVEL (an ordinary, non-worktree checkout)
     # to avoid mounting the same host path twice.
     if [ -n "$MAIN_REPO_PATH" ] && [ "$MAIN_REPO_PATH" != "$TOPLEVEL" ]; then
         MSB_ARGS+=(--mount-dir "$MAIN_REPO_PATH:$MAIN_REPO_PATH")
     fi
+else
+    # Not a git repo at all -- herdr-projects' own Coordinator chat folder,
+    # or a task that works outside git. Mount and cd into it regardless
+    # (confirmed live: without this, the sandbox fell back to msb's own
+    # default workdir instead of the pane's real one, and the Coordinator
+    # started with none of its own rules in reach).
+    WORKDIR="$(pwd)"
+    MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Discovers which repo(s) the current session should be scoped to, for the
-# msb-based sandbox: a plain session scopes to cwd's own git remotes
-# (origin = full read/write, upstream = read + PR-create only); a
-# herdr-projects coordinator (cwd has PROJECT.md, never a git repo itself)
-# gets none -- it never pushes or merges itself, only its own spawned
-# threads do, each in their own separately-scoped sandbox -- but still
-# needs its managed repos' paths mounted, to run `git worktree add`
-# locally when starting a thread.
+# Discovers which repo this session should be scoped to, for the msb-based
+# sandbox: cwd's own git remotes (origin = full read/write, upstream = read
+# + PR-create only). Outside a git repo -- herdr-projects' own Coordinator
+# chat folder, or a task that works outside git -- nothing git-specific is
+# scoped, but cwd is still reported so cs-launch mounts and cds into it
+# regardless (confirmed live: a herdr-projects 1.0 Coordinator starts in a
+# plain folder of its own, never a repo, and never writes a PROJECT.md-style
+# file -- there is no more "coordinator" case distinct from a plain one).
 #
 # Prints shell variable assignments to stdout, meant to be eval'd by the
 # caller (cs-launch), not executed directly.
@@ -56,29 +56,7 @@ if [ -n "$TOPLEVEL" ]; then
     [ -n "$common_dir" ] && MAIN_REPO_PATH="$(dirname "$common_dir")"
 fi
 
-IS_COORDINATOR=false
-PROJECT_REPO_PATHS=""
-WRITE_REPOS="$ORIGIN_REPO"
-PR_ONLY_REPOS="$UPSTREAM_REPO"
-
-if [ -f "PROJECT.md" ]; then
-    IS_COORDINATOR=true
-    TOPLEVEL=""
-    MAIN_REPO_PATH=""
-    WRITE_REPOS=""
-    PR_ONLY_REPOS=""
-    paths=()
-    while IFS= read -r repo_path; do
-        [ -n "$repo_path" ] && paths+=("$repo_path")
-    done < <(awk '/^\+\+\+$/{c++; next} c==1 && /^path = /' PROJECT.md | sed -E 's/^path = "(.*)"$/\1/')
-    if [ "${#paths[@]}" -gt 0 ]; then
-        PROJECT_REPO_PATHS="$(IFS=,; echo "${paths[*]}")"
-    fi
-fi
-
-echo "IS_COORDINATOR=$IS_COORDINATOR"
 echo "TOPLEVEL=$TOPLEVEL"
 echo "MAIN_REPO_PATH=$MAIN_REPO_PATH"
-echo "WRITE_REPOS=$WRITE_REPOS"
-echo "PR_ONLY_REPOS=$PR_ONLY_REPOS"
-echo "PROJECT_REPO_PATHS=$PROJECT_REPO_PATHS"
+echo "WRITE_REPOS=$ORIGIN_REPO"
+echo "PR_ONLY_REPOS=$UPSTREAM_REPO"
