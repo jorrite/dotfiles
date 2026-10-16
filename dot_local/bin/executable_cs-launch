@@ -109,17 +109,30 @@ fi
 # own folder, which claude is handed as --settings/--append-system-prompt-
 # file files under (confirmed live) and where a task's agent is told to
 # write its closing note directly (herdr-projects' own docs: "the agent is
-# told the full path"), not through any CLI/socket call. Scoped to these
-# two subdirectories, NOT the whole ~/.herdr-projects tree: data/bin holds
-# a platform-specific launcher (a macOS binary on the host), so sharing it
-# would stop the guest from ever having its own working Linux one there --
-# confirmed live: a Coordinator running in this sandbox got exit 127
-# running it. settings/ is deliberately left off too, for the same
-# platform-launcher reason (herdr-projects writes its own path into it).
+# told the full path"), not through any CLI/socket call.
+#
+# Mounted at the GUEST's own natural path (/home/ubuntu/.herdr-projects/...),
+# not mirrored at the host's -- confirmed live, twice: mirroring the host
+# path meant the image's own Linux binary (which resolves its data relative
+# to its own $HOME) never saw this real data at all, it just read an empty
+# /home/ubuntu/.herdr-projects/data of its own; and mounting *into* a fresh
+# /Users/<host-user>/... path created a root-owned, read-only mount-point
+# stub, where mounting into the already-ubuntu-owned /home/ubuntu tree
+# doesn't. HERDR_PROJECTS_HOME is also exported below so the guest's own
+# entrypoint can symlink the host's literal path to this real one --
+# herdr-projects' own AGENTS.md hardcodes that exact host path and expects
+# it to just run, it's not something we get to rewrite.
+#
+# Scoped to just these two subdirectories, not the whole ~/.herdr-projects
+# tree: data/bin and settings/ hold a platform-specific launcher (a macOS
+# binary on the host) and its own written-in path, which the image needs
+# its own separate Linux copies of instead.
 HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
+GUEST_HERDR_PROJECTS_HOME="/home/ubuntu/.herdr-projects"
 for dir in data/tasks data/coordinator; do
-    [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$HERDR_PROJECTS_HOME/$dir")
+    [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$GUEST_HERDR_PROJECTS_HOME/$dir")
 done
+MSB_ARGS+=(-e "HERDR_PROJECTS_HOME=$HERDR_PROJECTS_HOME")
 
 if [ -n "$TOPLEVEL" ]; then
     WORKDIR="$TOPLEVEL"
