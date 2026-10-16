@@ -150,7 +150,14 @@ else
     # default workdir instead of the pane's real one, and the Coordinator
     # started with none of its own rules in reach).
     WORKDIR="$(pwd)"
-    MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
+    case "$WORKDIR" in
+        "$HERDR_PROJECTS_HOME"/*)
+            WORKDIR="$GUEST_HERDR_PROJECTS_HOME${WORKDIR#"$HERDR_PROJECTS_HOME"}"
+            ;;
+        *)
+            MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
+            ;;
+    esac
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 
