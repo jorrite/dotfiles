@@ -158,9 +158,12 @@ else
             if [ -f "$REPOS_JSON" ]; then
                 MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
                 while IFS= read -r repo_path; do
-                    [ -n "$repo_path" ] && [ -d "$repo_path" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
+                    [ -n "$repo_path" ] && [ -d "$repo_path/.git" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
                 done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
             fi
+            ;;
+        "$HOME")
+            WORKDIR=""
             ;;
         *)
             MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
