@@ -27,37 +27,18 @@ onboarding = false
 # which herdr's own docs call out as the most reliable option on macOS.
 prefix = "ctrl+alt+cmd+shift+h"
 
-# herdr-projects popup, normally added by `herdr-projects configure`. Kept
-# here instead so it survives `chezmoi apply` -- run `herdr-projects
-# configure --hooks-only` after installing the plugin to set up its Claude
-# Code hooks/skill without letting it also write to this file.
-[[keys.command]]
-key = "prefix+a"
-type = "plugin_action"
-command = "herdr-projects.open-popup"
-description = "Projects"
-
 [worktrees]
 directory = "~/.herdr/worktrees"
 
 [terminal]
-# Pin every new pane to fish regardless of $SHELL, so the `claude` fish
-# function (dot_config/fish/functions/claude.fish) -- which redirects to
-# cs-launch's nono sandbox whenever $HERDR_ENV is set -- always applies,
-# including to panes herdr's own daemon spawns for herdr-projects threads
-# and coordinators (confirmed via testing: `herdr agent start` types the
-# command into the pane's actual interactive shell rather than spawning it
-# server-side, so this is shell-, not daemon-, scoped).
+# Pin every new pane to fish regardless of $SHELL, so claude's own PATH
+# wrapper (dot_local/bin/executable_claude, which redirects into
+# cs-launch's sandbox) always applies, including to panes herdr's own
+# daemon spawns for herdr-projects threads and coordinators (confirmed via
+# testing: `herdr agent start` types the command into the pane's actual
+# interactive shell rather than spawning it server-side, so this is
+# shell-, not daemon-, scoped).
 default_shell = "fish"
-
-[ui]
-# herdr-projects' tab-bar "needs attention" indicator. Routed through the
-# herdr-projects-status wrapper (dot_local/bin/executable_herdr-projects-status)
-# instead of the raw binary path `herdr-projects configure` would normally
-# write here, since that path is hash-suffixed and changes on every
-# plugin reinstall/update -- the wrapper resolves the current path at call
-# time instead of baking a stale one into this file.
-tab_bar_right = [{ type = "command", command = "herdr-projects-status --line", interval_seconds = 15, timeout_seconds = 5 }]
 
 [ui.toast]
 # Desktop notifications for background agent state (done / needs input),
@@ -65,8 +46,18 @@ tab_bar_right = [{ type = "command", command = "herdr-projects-status --line", i
 # notification service -- also keeps working when attached over SSH.
 delivery = "terminal"
 
+# >>> herdr-projects key (added by the herdr-projects plugin; `herdr-projects remove-extras` removes it)
+[[keys.command]]
+key = "prefix+a"
+type = "plugin_action"
+command = "herdr-projects.open"
+description = "work board"
+# <<< herdr-projects key
+
+# >>> herdr-projects sidebar (added by the herdr-projects plugin; `herdr-projects remove-extras` removes it)
 [ui.sidebar.agents]
-rows = [["state_icon", { token = "agent", bold = false, dim = false, rules = [{ contains = "​", bold = true }] }, "state_text"], [{ token = "$hp_sub", dim = true }]]
+rows = [["state_icon", "machine", "workspace", { token = "tab", rules = [{ equals = "Agent", hide = true }, { starts_with = "Reviewer #", hide = true }] }], ["agent"], [{ token = "$summary", dim = true }, "$progress"]]
 
 [ui.sidebar.spaces]
-rows = [["state_icon", { token = "workspace", rules = [{ contains = "⠀", bold = true }] }, { token = "branch", dim = true }, "git_status"]]
+rows = [["state_icon", "workspace"], ["branch", "git_status"], [{ token = "$summary", dim = true }, "$progress"]]
+# <<< herdr-projects sidebar

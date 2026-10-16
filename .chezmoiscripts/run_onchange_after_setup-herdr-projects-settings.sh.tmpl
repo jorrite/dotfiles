@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -e
+
+# Source helper library
+{{ include ".chezmoitemplates/lib.sh" }}
+
+log_step "⚙️ Herdr Projects Settings"
+
+HERDR_PROJECTS_BIN="$HOME/.herdr-projects/data/bin/herdr-projects"
+if [ ! -x "$HERDR_PROJECTS_BIN" ]; then
+    log_warning "herdr-projects is not installed -- skipping settings"
+    exit 0
+fi
+
+{{ range $name, $value := .herdr_projects_settings -}}
+log_substep "Setting {{ $name }} = {{ $value }}..."
+"$HERDR_PROJECTS_BIN" set {{ $name | quote }} {{ $value | quote }} || log_warning "Failed to set {{ $name }}"
+{{ end -}}
+
+log_success "Herdr Projects settings up to date"

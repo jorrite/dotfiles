@@ -37,8 +37,15 @@ log_success "No conflicting installs found"
 log_substep "🔪 Installing dev tools via Mise..."
 mise install
 
+# Not run_once: almost every tool here is pinned to "latest", not an exact
+# version, so the declared config only stays true to itself if each apply
+# re-resolves it -- `mise install` alone only fills in tools missing
+# entirely, it never moves an already-installed "latest" forward.
+log_substep "Upgrading tools pinned to latest..."
+mise upgrade
+
 echo
-log_success "Mise packages installed successfully! 🎉"
+log_success "Mise packages installed and up to date! 🎉"
 end_timer
 
 {{ end -}}

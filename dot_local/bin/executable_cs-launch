@@ -18,6 +18,7 @@ msb image list 2>/dev/null | grep -qF "$IMAGE" || agent-sandbox-pull
 
 eval "$(agent-sandbox-profile)"
 
+export GITHUB_TOKEN GIT_REAL_TOKEN
 GITHUB_TOKEN="$(gh auth token)"
 GIT_REAL_TOKEN="x-access-token:$GITHUB_TOKEN"
 
@@ -58,8 +59,8 @@ MSB_ARGS=(-u ubuntu
     -c 2
     -m 2G
     --max-memory 4G
-    -e "GITHUB_TOKEN=$GITHUB_TOKEN"
-    -e "GIT_REAL_TOKEN=$GIT_REAL_TOKEN"
+    -e "GITHUB_TOKEN"
+    -e "GIT_REAL_TOKEN"
     -e "WRITE_REPOS=$WRITE_REPOS"
     -e "PR_ONLY_REPOS=$PR_ONLY_REPOS"
     -e "GOMODCACHE=/home/ubuntu/.cache/go/mod"
@@ -71,10 +72,10 @@ MSB_ARGS=(-u ubuntu
 )
 
 if [ -n "$SIGNING_KEY_OP_REF" ]; then
-    MSB_ARGS+=(
-        -e "SIGNING_KEY=$(op read "$SIGNING_KEY_OP_REF" | base64)"
-        -e "SIGNING_KEY_PUBLIC=$(op read "$SIGNING_KEY_PUBLIC_OP_REF")"
-    )
+    export SIGNING_KEY SIGNING_KEY_PUBLIC
+    SIGNING_KEY="$(op read "$SIGNING_KEY_OP_REF" | base64)"
+    SIGNING_KEY_PUBLIC="$(op read "$SIGNING_KEY_PUBLIC_OP_REF")"
+    MSB_ARGS+=(-e "SIGNING_KEY" -e "SIGNING_KEY_PUBLIC")
 fi
 
 GIT_NAME="$(git config --get user.name 2>/dev/null || true)"
@@ -100,32 +101,83 @@ HERDR_VSOCK_PORT=54321
 if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
     MSB_ARGS+=(
         -e "HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH"
-        -e "HERDR_BIN_PATH=${HERDR_BIN_PATH:-}"
         -e "HERDR_PANE_ID=${HERDR_PANE_ID:-}"
         --vsock "$HERDR_SOCKET_PATH:$HERDR_VSOCK_PORT"
     )
 fi
 
-if [ "$IS_COORDINATOR" = true ]; then
-    WORKDIR="$(pwd)"
-    MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
-    if [ -n "$PROJECT_REPO_PATHS" ]; then
-        IFS=',' read -ra repo_paths <<< "$PROJECT_REPO_PATHS"
-        for repo_path in "${repo_paths[@]}"; do
-            MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
-        done
-    fi
-    # herdr's own fixed worktree root (default_config: [worktrees]
-    # directory) -- a coordinator creates threads here via `git worktree
-    # add`, a purely local git operation; mounted so a later thread's own
-    # separate msb run can mount the exact same host path.
-    WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
-        | sed -E 's/^directory = "(.*)"$/\1/')"
-    WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
-    [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
-else
+# herdr-projects' own data -- a coordinator's own chat folder and a task's
+# own folder, which claude is handed as --settings/--append-system-prompt-
+# file files under (confirmed live) and where a task's agent is told to
+# write its closing note directly (herdr-projects' own docs: "the agent is
+# told the full path"), not through any CLI/socket call.
+#
+# Mounted at the GUEST's own natural path (/home/ubuntu/.herdr-projects/...),
+# not mirrored at the host's -- confirmed live, twice: mirroring the host
+# path meant the image's own Linux binary (which resolves its data relative
+# to its own $HOME) never saw this real data at all, it just read an empty
+# /home/ubuntu/.herdr-projects/data of its own; and mounting *into* a fresh
+# /Users/<host-user>/... path created a root-owned, read-only mount-point
+# stub, where mounting into the already-ubuntu-owned /home/ubuntu tree
+# doesn't. HERDR_PROJECTS_HOME is also exported below so the guest's own
+# entrypoint can symlink the host's literal path to this real one --
+# herdr-projects' own AGENTS.md hardcodes that exact host path and expects
+# it to just run, it's not something we get to rewrite.
+#
+# Scoped to just these subdirectories, not the whole ~/.herdr-projects
+# tree: data/bin holds a platform-specific launcher (a macOS binary on the
+# host), which the image needs its own separate Linux copy of instead.
+# settings/ (reviewer.agent, repo keys, ...) is plain JSON, no path of any
+# kind in it -- confirmed by reading it -- so it's mounted the same way.
+HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
+GUEST_HERDR_PROJECTS_HOME="/home/ubuntu/.herdr-projects"
+for dir in data/tasks data/coordinator settings; do
+    [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$GUEST_HERDR_PROJECTS_HOME/$dir")
+done
+# data/repos.json (which repo each task belongs to) is needed by every
+# session, not just the Coordinator's -- a worker's own end-of-turn sync
+# step reads it too, confirmed live: without it a worker reports "this
+# task is in no repo" and fails syncing main.
+REPOS_JSON="$HERDR_PROJECTS_HOME/data/repos.json"
+[ -f "$REPOS_JSON" ] && MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
+MSB_ARGS+=(-e "HERDR_PROJECTS_HOME=$HERDR_PROJECTS_HOME")
+
+if [ -n "$TOPLEVEL" ]; then
     WORKDIR="$TOPLEVEL"
-    [ -n "$TOPLEVEL" ] && MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
+    MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
+    # A linked worktree's main repo (see agent-sandbox-profile) -- skip when
+    # it's the same path as $TOPLEVEL (an ordinary, non-worktree checkout)
+    # to avoid mounting the same host path twice.
+    if [ -n "$MAIN_REPO_PATH" ] && [ "$MAIN_REPO_PATH" != "$TOPLEVEL" ]; then
+        MSB_ARGS+=(--mount-dir "$MAIN_REPO_PATH:$MAIN_REPO_PATH")
+    fi
+else
+    # Not a git repo at all -- herdr-projects' own Coordinator chat folder,
+    # or a task that works outside git. Mount and cd into it regardless
+    # (confirmed live: without this, the sandbox fell back to msb's own
+    # default workdir instead of the pane's real one, and the Coordinator
+    # started with none of its own rules in reach).
+    WORKDIR="$(pwd)"
+    case "$WORKDIR" in
+        "$HERDR_PROJECTS_HOME"/*)
+            WORKDIR="$GUEST_HERDR_PROJECTS_HOME${WORKDIR#"$HERDR_PROJECTS_HOME"}"
+            if [ -f "$REPOS_JSON" ]; then
+                while IFS= read -r repo_path; do
+                    [ -n "$repo_path" ] && [ -d "$repo_path/.git" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
+                done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
+            fi
+            WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
+                | sed -E 's/^directory = "(.*)"$/\1/')"
+            WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
+            [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
+            ;;
+        "$HOME")
+            WORKDIR=""
+            ;;
+        *)
+            MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
+            ;;
+    esac
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 

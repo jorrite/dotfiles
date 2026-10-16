@@ -1,12 +1,12 @@
 #!/bin/bash
-# Discovers which repo(s) the current session should be scoped to, for the
-# msb-based sandbox: a plain session scopes to cwd's own git remotes
-# (origin = full read/write, upstream = read + PR-create only); a
-# herdr-projects coordinator (cwd has PROJECT.md, never a git repo itself)
-# gets none -- it never pushes or merges itself, only its own spawned
-# threads do, each in their own separately-scoped sandbox -- but still
-# needs its managed repos' paths mounted, to run `git worktree add`
-# locally when starting a thread.
+# Discovers which repo this session should be scoped to, for the msb-based
+# sandbox: cwd's own git remotes (origin = full read/write, upstream = read
+# + PR-create only). Outside a git repo -- herdr-projects' own Coordinator
+# chat folder, or a task that works outside git -- nothing git-specific is
+# scoped, but cwd is still reported so cs-launch mounts and cds into it
+# regardless (confirmed live: a herdr-projects 1.0 Coordinator starts in a
+# plain folder of its own, never a repo, and never writes a PROJECT.md-style
+# file -- there is no more "coordinator" case distinct from a plain one).
 #
 # Prints shell variable assignments to stdout, meant to be eval'd by the
 # caller (cs-launch), not executed directly.
@@ -31,6 +31,7 @@ parse_owner_repo() {
 
 ORIGIN_REPO=""
 UPSTREAM_REPO=""
+MAIN_REPO_PATH=""
 TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$TOPLEVEL" ] && [ -e ".git" ]; then
     echo "agent-sandbox-profile: warning: $(pwd) has .git but 'git rev-parse --show-toplevel' failed or returned empty; no repo scoped" >&2
@@ -40,29 +41,22 @@ if [ -n "$TOPLEVEL" ]; then
     upstream_url="$(git remote get-url upstream 2>/dev/null || true)"
     [ -n "$origin_url" ] && ORIGIN_REPO="$(parse_owner_repo "$origin_url")"
     [ -n "$upstream_url" ] && UPSTREAM_REPO="$(parse_owner_repo "$upstream_url")"
+    # A linked worktree's .git is just a pointer file -- its real metadata
+    # (HEAD, refs, objects, and its own .git/worktrees/<name> private dir,
+    # which lives *inside* this same common dir) stays in the repo it was
+    # created from. --git-common-dir always resolves to that main repo's
+    # .git, even from inside the worktree (confirmed empirically: this is
+    # exactly what broke a real delegated task -- its worktree mounted fine,
+    # but the main repo wasn't, so git inside the sandbox followed the
+    # pointer to a path that didn't exist there and failed outright). For
+    # an ordinary (non-worktree) checkout this is just $TOPLEVEL/.git, so
+    # its parent is $TOPLEVEL itself -- cs-launch skips a redundant mount
+    # in that case.
+    common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    [ -n "$common_dir" ] && MAIN_REPO_PATH="$(dirname "$common_dir")"
 fi
 
-IS_COORDINATOR=false
-PROJECT_REPO_PATHS=""
-WRITE_REPOS="$ORIGIN_REPO"
-PR_ONLY_REPOS="$UPSTREAM_REPO"
-
-if [ -f "PROJECT.md" ]; then
-    IS_COORDINATOR=true
-    TOPLEVEL=""
-    WRITE_REPOS=""
-    PR_ONLY_REPOS=""
-    paths=()
-    while IFS= read -r repo_path; do
-        [ -n "$repo_path" ] && paths+=("$repo_path")
-    done < <(awk '/^\+\+\+$/{c++; next} c==1 && /^path = /' PROJECT.md | sed -E 's/^path = "(.*)"$/\1/')
-    if [ "${#paths[@]}" -gt 0 ]; then
-        PROJECT_REPO_PATHS="$(IFS=,; echo "${paths[*]}")"
-    fi
-fi
-
-echo "IS_COORDINATOR=$IS_COORDINATOR"
 echo "TOPLEVEL=$TOPLEVEL"
-echo "WRITE_REPOS=$WRITE_REPOS"
-echo "PR_ONLY_REPOS=$PR_ONLY_REPOS"
-echo "PROJECT_REPO_PATHS=$PROJECT_REPO_PATHS"
+echo "MAIN_REPO_PATH=$MAIN_REPO_PATH"
+echo "WRITE_REPOS=$ORIGIN_REPO"
+echo "PR_ONLY_REPOS=$UPSTREAM_REPO"

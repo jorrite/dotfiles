@@ -148,20 +148,19 @@ open_with_instructions "Rectangle" "🪟" \
 
 1. Grant Accessibility permission when prompted"
 
-# === Claude Code sandboxing (nono + herdr) ===
+# === Claude Code sandboxing (msb + herdr) ===
 open_with_instructions "" "🤖" \
-"One-time setup for running Claude Code sandboxed via nono, inside herdr:
+"One-time setup for running Claude Code sandboxed via msb, inside herdr:
 
-1. Install the Claude Code nono pack (one-time; nono no longer prompts
-   for this automatically on first run, so it must be pulled up front):
-   nono pull nolabs-ai/claude
+1. Make sure 'gh auth login' is already done -- cs-launch reads a GitHub
+   token from 'gh auth token' and never triggers a login itself
 2. Start herdr: run 'herdr' in a terminal
-3. Inside a herdr pane, type 'cs' and press enter -- the fish abbreviation
-   expands to cs-launch, which discovers the current repo and scopes the
-   session to it automatically (no manual --profile/--allow-cwd flags
-   needed)
-4. Complete the OAuth login flow in the browser window that opens on
-   first gh use"
+3. Inside a herdr pane, type 'claude' and press enter -- it's a plain PATH
+   wrapper into cs-launch (dot_local/bin/executable_claude), which
+   discovers the current repo and scopes the session to it automatically
+   (no manual --profile/--allow-cwd flags needed)
+4. Complete Claude Code's own login the first time it asks -- it persists
+   in a dedicated sandbox-only volume, so this is a one-time step"
 
 # === Alcove ===
 open_with_instructions "Alcove" "📺" \
