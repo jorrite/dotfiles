@@ -154,6 +154,13 @@ else
     case "$WORKDIR" in
         "$HERDR_PROJECTS_HOME"/*)
             WORKDIR="$GUEST_HERDR_PROJECTS_HOME${WORKDIR#"$HERDR_PROJECTS_HOME"}"
+            REPOS_JSON="$HERDR_PROJECTS_HOME/data/repos.json"
+            if [ -f "$REPOS_JSON" ]; then
+                MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
+                while IFS= read -r repo_path; do
+                    [ -n "$repo_path" ] && [ -d "$repo_path" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
+                done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
+            fi
             ;;
         *)
             MSB_ARGS+=(--mount-dir "$WORKDIR:$WORKDIR")
