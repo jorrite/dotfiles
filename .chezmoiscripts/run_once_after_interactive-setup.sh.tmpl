@@ -155,8 +155,8 @@ open_with_instructions "" "🤖" \
 1. Make sure 'gh auth login' is already done -- cs-launch reads a GitHub
    token from 'gh auth token' and never triggers a login itself
 2. Start herdr: run 'herdr' in a terminal
-3. Inside a herdr pane, type 'claude' and press enter -- it's a plain PATH
-   wrapper into cs-launch (dot_local/bin/executable_claude), which
+3. Inside a herdr pane, type 'claude' and press enter -- it's a fish
+   function into cs-launch (dot_config/fish/functions/claude.fish), which
    discovers the current repo and scopes the session to it automatically
    (no manual --profile/--allow-cwd flags needed)
 4. Complete Claude Code's own login the first time it asks -- it persists
