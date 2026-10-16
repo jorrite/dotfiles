@@ -31,8 +31,8 @@ prefix = "ctrl+alt+cmd+shift+h"
 directory = "~/.herdr/worktrees"
 
 [terminal]
-# Pin every new pane to fish regardless of $SHELL, so claude's own PATH
-# wrapper (dot_local/bin/executable_claude, which redirects into
+# Pin every new pane to fish regardless of $SHELL, so the `claude` fish
+# function (dot_config/fish/functions/claude.fish, which redirects into
 # cs-launch's sandbox) always applies, including to panes herdr's own
 # daemon spawns for herdr-projects threads and coordinators (confirmed via
 # testing: `herdr agent start` types the command into the pane's actual
