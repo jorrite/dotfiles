@@ -161,6 +161,10 @@ else
                     [ -n "$repo_path" ] && [ -d "$repo_path/.git" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
                 done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
             fi
+            WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
+                | sed -E 's/^directory = "(.*)"$/\1/')"
+            WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
+            [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
             ;;
         "$HOME")
             WORKDIR=""
