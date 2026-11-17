@@ -13,9 +13,9 @@
 # its own vendor_conf.d snippet regardless of this repo.
 .config/fish/conf.d/mise.fish
 
-# Replaced by a fish function, which itself was later dropped: herdr
-# starts agents through cs-launch (programs.json and the hc templates), so
-# nothing shims `claude` anymore.
+# Replaced by a fish function, which itself was later dropped: nothing
+# shims `claude` anymore, it is the mise-installed binary as-is (cs-launch
+# stays available to run by hand, nothing starts it automatically).
 .local/bin/claude
 .config/fish/functions/claude.fish
 .config/fish/functions/claude-yolo.fish

@@ -35,4 +35,3 @@ ehthumbs.db
 # LOCAL TOOL STATE
 **/.claude/settings.local.json
 **/.claude/.cc-writes/
-**/.claude/worktrees/
