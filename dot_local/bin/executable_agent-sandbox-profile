@@ -1,12 +1,10 @@
 #!/bin/bash
 # Discovers which repo this session should be scoped to, for the msb-based
 # sandbox: cwd's own git remotes (origin = full read/write, upstream = read
-# + PR-create only). Outside a git repo -- herdr-projects' own Coordinator
-# chat folder, or a task that works outside git -- nothing git-specific is
-# scoped, but cwd is still reported so cs-launch mounts and cds into it
-# regardless (confirmed live: a herdr-projects 1.0 Coordinator starts in a
-# plain folder of its own, never a repo, and never writes a PROJECT.md-style
-# file -- there is no more "coordinator" case distinct from a plain one).
+# + PR-create only). Outside a git repo nothing git-specific is scoped, but
+# cwd is still reported so cs-launch mounts and cds into it regardless
+# (confirmed live: without this, the sandbox fell back to msb's own
+# default workdir instead of the pane's real one).
 #
 # Prints shell variable assignments to stdout, meant to be eval'd by the
 # caller (cs-launch), not executed directly.
