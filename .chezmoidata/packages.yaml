@@ -29,6 +29,7 @@ packages:
       - font-geist
       - font-geist-mono
       - font-geist-mono-nerd-font
+      - herdr-app
       - karabiner-elements
       - keka
       - rectangle
