@@ -7,6 +7,10 @@
 # (jorrite/agent-sandbox's own image, not a profile authored here).
 set -euo pipefail
 
+# Callers other than an interactive fish shell (hc templates run this through
+# plain sh, with no profile) don't have mise's shims or Homebrew on PATH.
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
 IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
 
 # msb's own implicit pull is broken for this image (agent-sandbox-pull's
@@ -107,4 +111,27 @@ else
 fi
 [ -n "${WORKDIR:-}" ] && MSB_ARGS+=(-w "$WORKDIR")
 
-exec msb run --pull never "${MSB_ARGS[@]}" "$IMAGE" -- claude "$@"
+# Herdr starts every agent through this script (programs.json for the app's
+# menu, the templates in dot_config/herdr-core for hc), so this is where
+# "agents always work in a worktree" is enforced: from the repo's main
+# checkout, hand claude its own worktree (claude's native --worktree, under
+# <repo>/.claude/worktrees, so it is already inside the repo mount). Skipped
+# when already in a linked worktree (e.g. from the app's New worktree), when
+# resuming, when the caller picked a worktree itself, or with CS_WORKTREE=0
+# (read-only roles like the reviewer template). The explicit name also keeps
+# claude from taking a trailing prompt argument as the worktree's name.
+CLAUDE_ARGS=("$@")
+if [ "${CS_WORKTREE:-1}" != "0" ] && [ -n "$TOPLEVEL" ] && [ "$TOPLEVEL" = "$MAIN_REPO_PATH" ]; then
+    want_worktree=1
+    for arg in "$@"; do
+        case "$arg" in
+            -w|--worktree|--worktree=*|-r|--resume|--resume=*|-c|--continue) want_worktree=0 ;;
+        esac
+    done
+    if [ "$want_worktree" = 1 ]; then
+        CLAUDE_ARGS=(--worktree "agent-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')" "$@")
+    fi
+fi
+
+# ${arr[@]+...}: macOS's bash 3.2 treats an empty array as unset under set -u.
+exec msb run --pull never "${MSB_ARGS[@]}" "$IMAGE" -- claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}

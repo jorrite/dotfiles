@@ -13,8 +13,12 @@
 # its own vendor_conf.d snippet regardless of this repo.
 .config/fish/conf.d/mise.fish
 
-# Replaced by a fish function (dot_config/fish/functions/claude.fish).
+# Replaced by a fish function, which itself was later dropped: herdr
+# starts agents through cs-launch (programs.json and the hc templates), so
+# nothing shims `claude` anymore.
 .local/bin/claude
+.config/fish/functions/claude.fish
+.config/fish/functions/claude-yolo.fish
 
 # Pre-msb-migration nono profiles: nono no longer sandboxes the host
 # process directly for `cs`, it moved entirely inside the guest, so these
