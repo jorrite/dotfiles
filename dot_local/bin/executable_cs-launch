@@ -1,11 +1,10 @@
 #!/bin/bash
-# cs = "claude sandbox": scopes the current session (or herdr-projects
-# coordinator/thread) to its own repo(s) via agent-sandbox-profile, then
-# launches Claude Code inside an msb-sandboxed VM instead of the real
-# binary. nono no longer sandboxes the host process directly -- the whole
-# exec-containment job moved to msb's VM boundary, with nono's credential
-# scoping now living entirely inside the guest (jorrite/agent-sandbox's
-# own image, not a profile authored here).
+# cs = "claude sandbox": scopes the current session to its own repo via
+# agent-sandbox-profile, then launches Claude Code inside an msb-sandboxed
+# VM instead of the real binary. nono no longer sandboxes the host process
+# directly -- the whole exec-containment job moved to msb's VM boundary,
+# with nono's credential scoping now living entirely inside the guest
+# (jorrite/agent-sandbox's own image, not a profile authored here).
 set -euo pipefail
 
 IMAGE="ghcr.io/jorrite/agent-sandbox:latest"
@@ -83,65 +82,6 @@ GIT_EMAIL="$(git config --get user.email 2>/dev/null || true)"
 [ -n "$GIT_NAME" ] && MSB_ARGS+=(-e "GIT_AUTHOR_NAME=$GIT_NAME" -e "GIT_COMMITTER_NAME=$GIT_NAME")
 [ -n "$GIT_EMAIL" ] && MSB_ARGS+=(-e "GIT_AUTHOR_EMAIL=$GIT_EMAIL" -e "GIT_COMMITTER_EMAIL=$GIT_EMAIL")
 
-# nono's own startup banner used to sit in front of claude's screen output,
-# defeating herdr's screen-pattern agent detection entirely (confirmed:
-# timed out, never detected). HERDR_AGENT tells herdr directly what's
-# running instead of relying on screen content -- still true with msb's
-# own boot/proxy-setup output sitting in front of claude the same way.
-# Only set inside an actual herdr pane ($HERDR_ENV) -- cs-launch also runs
-# standalone outside herdr, where the hint means nothing and herdr's own
-# docs caution against exporting it unconditionally.
-if [ -n "${HERDR_ENV:-}" ]; then
-    export HERDR_AGENT=claude
-fi
-
-# Fixed port, no negotiation needed: every session is its own independent
-# VM, so there's nothing for one session's vsock route to collide with.
-HERDR_VSOCK_PORT=54321
-if [ -n "${HERDR_SOCKET_PATH:-}" ]; then
-    MSB_ARGS+=(
-        -e "HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH"
-        -e "HERDR_PANE_ID=${HERDR_PANE_ID:-}"
-        --vsock "$HERDR_SOCKET_PATH:$HERDR_VSOCK_PORT"
-    )
-fi
-
-# herdr-projects' own data -- a coordinator's own chat folder and a task's
-# own folder, which claude is handed as --settings/--append-system-prompt-
-# file files under (confirmed live) and where a task's agent is told to
-# write its closing note directly (herdr-projects' own docs: "the agent is
-# told the full path"), not through any CLI/socket call.
-#
-# Mounted at the GUEST's own natural path (/home/ubuntu/.herdr-projects/...),
-# not mirrored at the host's -- confirmed live, twice: mirroring the host
-# path meant the image's own Linux binary (which resolves its data relative
-# to its own $HOME) never saw this real data at all, it just read an empty
-# /home/ubuntu/.herdr-projects/data of its own; and mounting *into* a fresh
-# /Users/<host-user>/... path created a root-owned, read-only mount-point
-# stub, where mounting into the already-ubuntu-owned /home/ubuntu tree
-# doesn't. HERDR_PROJECTS_HOME is also exported below so the guest's own
-# entrypoint can symlink the host's literal path to this real one --
-# herdr-projects' own AGENTS.md hardcodes that exact host path and expects
-# it to just run, it's not something we get to rewrite.
-#
-# Scoped to just these subdirectories, not the whole ~/.herdr-projects
-# tree: data/bin holds a platform-specific launcher (a macOS binary on the
-# host), which the image needs its own separate Linux copy of instead.
-# settings/ (reviewer.agent, repo keys, ...) is plain JSON, no path of any
-# kind in it -- confirmed by reading it -- so it's mounted the same way.
-HERDR_PROJECTS_HOME="${HERDR_PROJECTS_HOME:-$HOME/.herdr-projects}"
-GUEST_HERDR_PROJECTS_HOME="/home/ubuntu/.herdr-projects"
-for dir in data/tasks data/coordinator settings; do
-    [ -d "$HERDR_PROJECTS_HOME/$dir" ] && MSB_ARGS+=(--mount-dir "$HERDR_PROJECTS_HOME/$dir:$GUEST_HERDR_PROJECTS_HOME/$dir")
-done
-# data/repos.json (which repo each task belongs to) is needed by every
-# session, not just the Coordinator's -- a worker's own end-of-turn sync
-# step reads it too, confirmed live: without it a worker reports "this
-# task is in no repo" and fails syncing main.
-REPOS_JSON="$HERDR_PROJECTS_HOME/data/repos.json"
-[ -f "$REPOS_JSON" ] && MSB_ARGS+=(--mount-file "$REPOS_JSON:$GUEST_HERDR_PROJECTS_HOME/data/repos.json")
-MSB_ARGS+=(-e "HERDR_PROJECTS_HOME=$HERDR_PROJECTS_HOME")
-
 if [ -n "$TOPLEVEL" ]; then
     WORKDIR="$TOPLEVEL"
     MSB_ARGS+=(--mount-dir "$TOPLEVEL:$TOPLEVEL")
@@ -152,25 +92,11 @@ if [ -n "$TOPLEVEL" ]; then
         MSB_ARGS+=(--mount-dir "$MAIN_REPO_PATH:$MAIN_REPO_PATH")
     fi
 else
-    # Not a git repo at all -- herdr-projects' own Coordinator chat folder,
-    # or a task that works outside git. Mount and cd into it regardless
-    # (confirmed live: without this, the sandbox fell back to msb's own
-    # default workdir instead of the pane's real one, and the Coordinator
-    # started with none of its own rules in reach).
+    # Not a git repo at all. Mount and cd into it regardless (confirmed
+    # live: without this, the sandbox fell back to msb's own default
+    # workdir instead of the pane's real one).
     WORKDIR="$(pwd)"
     case "$WORKDIR" in
-        "$HERDR_PROJECTS_HOME"/*)
-            WORKDIR="$GUEST_HERDR_PROJECTS_HOME${WORKDIR#"$HERDR_PROJECTS_HOME"}"
-            if [ -f "$REPOS_JSON" ]; then
-                while IFS= read -r repo_path; do
-                    [ -n "$repo_path" ] && [ -d "$repo_path/.git" ] && MSB_ARGS+=(--mount-dir "$repo_path:$repo_path")
-                done < <(jq -r '.[]' "$REPOS_JSON" 2>/dev/null)
-            fi
-            WORKTREES_DIR="$(awk '/^\[worktrees\]/{f=1; next} /^\[/{f=0} f && /^directory = /{print; exit}' "$HOME/.config/herdr/config.toml" \
-                | sed -E 's/^directory = "(.*)"$/\1/')"
-            WORKTREES_DIR="${WORKTREES_DIR/#\~/$HOME}"
-            [ -n "$WORKTREES_DIR" ] && MSB_ARGS+=(--mount-dir "$WORKTREES_DIR:$WORKTREES_DIR")
-            ;;
         "$HOME")
             WORKDIR=""
             ;;

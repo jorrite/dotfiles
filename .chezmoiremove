@@ -40,7 +40,7 @@
 .local/bin/agent-sandbox-ssh-askpass
 .local/bin/agent-sandbox-ssh-setup
 
-# herdr-projects 1.0 has no needs-you-style polling action to indirect
-# through at all; status now comes from herdr core's own
-# pane.agent_status_changed events.
+# herdr (and its herdr-projects plugin) was removed entirely.
+.config/herdr/config.toml
+.config/fish/functions/hpa.fish
 .local/bin/herdr-projects-status

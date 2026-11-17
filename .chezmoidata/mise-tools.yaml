@@ -9,7 +9,6 @@ mise_tools:
     gh: "latest"
     golang: "latest"
     golangci-lint: "v2.11.4"
-    herdr: "latest"
     just: "latest"
     microsandbox: "latest"
     node: "latest"
