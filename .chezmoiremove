@@ -13,8 +13,12 @@
 # its own vendor_conf.d snippet regardless of this repo.
 .config/fish/conf.d/mise.fish
 
-# Replaced by a fish function (dot_config/fish/functions/claude.fish).
+# Replaced by a fish function, which itself was later dropped: nothing
+# shims `claude` anymore, it is the mise-installed binary as-is (cs-launch
+# stays available to run by hand, nothing starts it automatically).
 .local/bin/claude
+.config/fish/functions/claude.fish
+.config/fish/functions/claude-yolo.fish
 
 # Pre-msb-migration nono profiles: nono no longer sandboxes the host
 # process directly for `cs`, it moved entirely inside the guest, so these

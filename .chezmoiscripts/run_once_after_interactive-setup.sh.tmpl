@@ -154,10 +154,10 @@ open_with_instructions "" "🤖" \
 
 1. Make sure 'gh auth login' is already done -- cs-launch reads a GitHub
    token from 'gh auth token' and never triggers a login itself
-2. In any terminal, type 'claude' and press enter -- it's a fish
-   function into cs-launch (dot_config/fish/functions/claude.fish), which
-   discovers the current repo and scopes the session to it automatically
-   (no manual --profile/--allow-cwd flags needed)
+2. Run 'cs-launch' by hand in a repo -- it discovers the current repo and
+   scopes the session to it automatically (no manual --profile/--allow-cwd
+   flags needed). Nothing starts it for you: a plain 'claude' (in a shell,
+   or from Herdr's menu and hc templates) is NOT sandboxed.
 3. Complete Claude Code's own login the first time it asks -- it persists
    in a dedicated sandbox-only volume, so this is a one-time step"
 
