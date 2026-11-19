@@ -1,0 +1,64 @@
+#!/bin/bash
+# nono session hook for the profiles nono-git-profile generates. nono runs it outside the
+# sandbox. A hook config cannot pass arguments, so per-launch stubs written by the generator
+# call this with the launch directory they were made for:
+#   before <dir>  starts a private ssh-agent holding only the dedicated signing key
+#   after  <dir>  stops that agent and removes <dir>
+#   watch  <dir> <pid>  waits for <pid> to exit, then does what after does
+# The key is piped from 1Password into ssh-add and never written to a file. The 1Password
+# SSH agent is not involved. herdr ends a worker by killing nono, which skips the after hook,
+# so before also starts a watcher in its own session that cleans up once nono is gone. The
+# agent drops the key after KEY_TTL no matter what.
+set -euo pipefail
+
+KEY_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pabtxxz4/private_key"
+KEY_TTL=1d
+WATCH_MAX=86400 # as long as the key lives
+WATCH_INTERVAL="${NONO_WATCH_INTERVAL:-3}"
+# NONO_SIGNING_KEY_CMD replaces the 1Password read, for tests.
+KEY_CMD="${NONO_SIGNING_KEY_CMD:-op read '$KEY_OP_REF'}"
+
+mode="${1:?usage: git-session-hook before|after|watch <launch dir> [pid]}"
+dir="${2:?usage: git-session-hook before|after|watch <launch dir> [pid]}"
+
+# after does rm -rf, so only ever touch a launch directory made by the generator.
+parent="${dir%/*}"
+if ! [[ "${dir##*/}" =~ ^[0-9a-f]{8}$ && "${parent##*/}" == nono-git-profile ]]; then
+  echo "git-session-hook: refusing '$dir', not a nono-git-profile launch directory" >&2
+  exit 1
+fi
+if [ ! -d "$dir" ]; then
+  # Already cleaned up: the normal case when the watcher follows the after hook.
+  [ "$mode" = before ] && { echo "git-session-hook: $dir does not exist" >&2; exit 1; }
+  exit 0
+fi
+
+case "$mode" in
+  before)
+    eval "$(ssh-agent -a "$dir/a" -s)" >/dev/null
+    echo "$SSH_AGENT_PID" > "$dir/pid"
+    sh -c "$KEY_CMD" | SSH_AUTH_SOCK="$dir/a" ssh-add -t "$KEY_TTL" - 2>/dev/null
+    # git signs with the public key and ssh-keygen finds the private half in the agent.
+    SSH_AUTH_SOCK="$dir/a" ssh-add -L | head -1 > "$dir/signing.pub"
+    # Becomes the session's TMPDIR, so what it writes is gone with the directory.
+    echo "TMPDIR=$dir/tmp" >> "$NONO_ENV_FILE"
+    # perl because macOS has no setsid, and the watcher must outlive a killed process group.
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$0" watch "$dir" "$PPID" </dev/null >/dev/null 2>&1 &
+    ;;
+  after)
+    [ -f "$dir/pid" ] && kill "$(cat "$dir/pid")" 2>/dev/null || true
+    rm -rf "$dir"
+    ;;
+  watch)
+    pid="${3:?usage: git-session-hook watch <launch dir> <pid>}"
+    for ((i = 0; i < WATCH_MAX / WATCH_INTERVAL; i++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep "$WATCH_INTERVAL"
+    done
+    exec "$0" after "$dir"
+    ;;
+  *)
+    echo "git-session-hook: unknown mode '$mode'" >&2
+    exit 1
+    ;;
+esac

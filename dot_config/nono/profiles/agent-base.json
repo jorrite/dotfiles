@@ -1,0 +1,122 @@
+// Static base for the per-launch profiles that nono-git-profile generates
+// (dot_local/bin/executable_nono-git-profile). Not meant to run on its own: the
+// repo-scoped grant for the "gh-git" credential is deliberately NOT here, because
+// nono errors on two different endpoint policies for one credential, so the
+// generated child is the only place that may declare it. The same goes for
+// network.tls_intercept: nono refuses to start when it is set without any proxy
+// feature, so the child emits it together with the grant and never without one.
+{
+  "meta": {
+    "name": "agent-base",
+    "description": "Mediated git over HTTPS plus the default command blocklist; extended by generated profiles"
+  },
+  "extends": "default",
+  // nono's built-in toolchain groups, so mise and what it installs can run. Groups rather
+  // than the *-dev profiles, which also switch on a network allow-list.
+  "groups": {
+    "include": [
+      "mise_manager",
+      "go_runtime",
+      "go_runtime_macos",
+      "python_runtime",
+      "node_runtime",
+      "bun_runtime",
+      "rust_runtime",
+      "java_runtime",
+      "user_caches_macos"
+    ]
+  },
+  // Package caches (content-hashed, so a poisoned entry fails verification) and mise's
+  // tracking dir. Its trusted-configs sibling stays read-only so a session cannot mise trust.
+  // nono skips paths that do not exist, so this works on machines without all of them.
+  "filesystem": {
+    "allow": [
+      "$HOME/go/pkg/mod",
+      "$HOME/.npm",
+      "$HOME/.bun/install/cache",
+      "$HOME/.atmos",
+      "$HOME/.local/state/mise/tracked-configs"
+    ]
+  },
+  // terraform cannot read ~/.terraformrc or ~/.terraform.d here (credentials live there)
+  // and complains on every run, so it gets an empty CLI config instead.
+  "environment": {
+    "set_vars": { "TF_CLI_CONFIG_FILE": "/dev/null" }
+  },
+  // The GitHub token is captured from the host's gh on the first request and never
+  // enters the sandbox. GitHub wants Basic auth for git smart HTTP, so nono has to
+  // send base64("x-access-token:<token>"). Capture names allow only [A-Za-z0-9_].
+  "credential_capture": {
+    "gh_basic": {
+      "command": ["sh", "-c", "printf 'x-access-token:%s' \"$(gh auth token)\" | base64 | tr -d '\\n'"],
+      "timeout_secs": 10,
+      "cache_ttl_secs": 3600
+    }
+  },
+  "command_policies": {
+    "credentials": {
+      "gh-git": {
+        "type": "proxy",
+        "upstream": "https://github.com",
+        "credential_key": "cmd://gh_basic",
+        "inject_header": "Authorization",
+        "credential_format": "Basic {}",
+        "env_var": "GH_GIT_PHANTOM",
+        "base_url_env_var": "GH_GIT_BASE_URL"
+      }
+    },
+    "commands": {
+      "git": {
+        "sandbox": {
+          "fs_read": ["$WORKDIR", "@git:common-dir", "/opt/homebrew", "/etc/ssl"],
+          "fs_write": ["$WORKDIR", "@git:common-dir"],
+          "environment": {
+            // The global gitconfig rewrites https to ssh and points at the keychain
+            // helper, both of which fail in here, so git runs without it. That also
+            // drops user.name, user.email and the signing setup, which the generated
+            // child supplies. XDG_CONFIG_HOME points at an empty dir so git stays quiet
+            // about the ~/.config/git/ignore it is not allowed to read.
+            "set_vars": {
+              "GIT_CONFIG_GLOBAL": "/dev/null",
+              "GIT_CONFIG_SYSTEM": "/dev/null",
+              "GIT_TERMINAL_PROMPT": "0",
+              "XDG_CONFIG_HOME": "/private/var/empty"
+            }
+          }
+        }
+      },
+
+      // nono 0.82 drops the inherited dangerous_commands blocklist as soon as any
+      // command_policies.commands entry exists (nolabs-ai/nono#2247), so it is restated
+      // here: the same set as nono's default, minus the entries that cannot be mediated
+      // on macOS. doas, ftp, poweroff and srm do not exist there, and /usr/bin/sudo is
+      // execute-only (mode 4111), which nono cannot scan, so sudo stays unmediated. xattr is
+      // added on top: it strips com.apple.quarantine.
+      "rm": { "from": { "session": "deny" } },
+      "rmdir": { "from": { "session": "deny" } },
+      "dd": { "from": { "session": "deny" } },
+      "chmod": { "from": { "session": "deny" } },
+      "chown": { "from": { "session": "deny" } },
+      "chgrp": { "from": { "session": "deny" } },
+      "mv": { "from": { "session": "deny" } },
+      "cp": { "from": { "session": "deny" } },
+      "truncate": { "from": { "session": "deny" } },
+      "scp": { "from": { "session": "deny" } },
+      "rsync": { "from": { "session": "deny" } },
+      "sftp": { "from": { "session": "deny" } },
+      "xargs": { "from": { "session": "deny" } },
+      "su": { "from": { "session": "deny" } },
+      "xattr": { "from": { "session": "deny" } },
+      "pip": { "from": { "session": "deny" } },
+      "npm": { "from": { "session": "deny" } },
+      "kill": { "from": { "session": "deny" } },
+      "killall": { "from": { "session": "deny" } },
+      "pkill": { "from": { "session": "deny" } },
+      "shutdown": { "from": { "session": "deny" } },
+      "reboot": { "from": { "session": "deny" } },
+      "halt": { "from": { "session": "deny" } },
+      "brew": { "from": { "session": "deny" } },
+      "launchctl": { "from": { "session": "deny" } }
+    }
+  }
+}

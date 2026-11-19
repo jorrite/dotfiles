@@ -1,0 +1,350 @@
+#!/usr/bin/env -S uv run --script --quiet
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Scope nono's mediated git to the repositories around the current directory.
+
+Run on the host before the sandbox starts. It prints the path of a validated nono
+profile for the sandboxed `git`:
+
+  reads    any github.com repo, public or private (the token decides what exists)
+  writes   origin of the repo at --cwd, and only with --push
+
+The profile extends a static base (dot_config/nono/profiles/agent-base.json) that
+holds the credential and the git sandbox, so only the write target is generated here.
+
+Commits are signed. For that the generator makes a launch directory under
+$XDG_STATE_HOME/nono-git-profile/<id>/ and puts the profile, two hook stubs and every
+path the profile mentions in it. nono's before hook (dot_config/nono/hooks/git-session-hook)
+starts a private ssh-agent with the dedicated signing key there, and the after hook stops
+it and removes the whole directory. Pass --no-sign to skip all of that.
+
+  cs-launch --push
+
+cs-launch is nono run --strict-broker-path --profile "$(nono-git-profile --push)" --allow-cwd --
+claude. --strict-broker-path makes nono refuse to start when a directory on PATH is writable by
+the sandbox, because a planted binary there would later run outside it.
+
+It extends agent-base and the claude pack from nono (`nono pull nolabs-ai/claude`), and inside
+a herdr terminal (HC_TERMINAL_ID is set) also the herdr profile, which lets the agent use hc.
+--base replaces that list.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import secrets
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+GITHUB_HOST = "github.com"
+CREDENTIAL = "gh-git"  # defined in agent-base.json
+HERDR_BASE = "herdr"
+HOOK_NAME = "git-session-hook"
+SSH_KEYGEN = "/usr/bin/ssh-keygen"
+# nono never renews the proxy CA or the leaf certs under it, so intercepted requests fail
+# once this passes and only a new session helps (nolabs-ai/nono#1681). Leave leaf_validity
+# unset: leaves expire with the CA, and a shorter value only brings the failure forward.
+CA_VALIDITY = "30d"
+MAX_SOCKET_PATH = 100  # sun_path is 104 bytes on macOS
+BEFORE_TIMEOUT = 120  # the 1Password read can wait for an approval
+AFTER_TIMEOUT = 15
+ORPHAN_AFTER = 3600  # a launch dir that never got an agent is stale after this many seconds
+
+_URL_FORM = re.compile(
+    r"^(?:https?|ssh|git|git\+ssh|ssh\+git)://(?:[^@/]*@)?(?P<host>[^/:]+)(?::\d+)?/(?P<path>.+)$"
+)
+_SCP_FORM = re.compile(r"^(?:[^@/:]+@)?(?P<host>[^/:]+):(?P<path>[^/].*)$")
+_LAUNCH_ID = re.compile(r"^[0-9a-f]{8}$")
+
+
+@dataclass(frozen=True)
+class Launch:
+    """Everything one nono session owns. The session hooks remove it again."""
+
+    dir: Path
+
+    @property
+    def sock(self) -> Path:
+        return self.dir / "a"
+
+    @property
+    def tmp(self) -> Path:
+        return self.dir / "tmp"
+
+    @property
+    def pubkey(self) -> Path:
+        return self.dir / "signing.pub"
+
+    @property
+    def profile(self) -> Path:
+        return self.dir / "profile.json"
+
+    @property
+    def before(self) -> Path:
+        return self.dir / "before.sh"
+
+    @property
+    def after(self) -> Path:
+        return self.dir / "after.sh"
+
+    @classmethod
+    def new(cls, state: Path, token: str | None = None) -> Launch:
+        launch = cls(state / (token or secrets.token_hex(4)))
+        if len(str(launch.sock)) > MAX_SOCKET_PATH:
+            raise SystemExit(f"nono-git-profile: {launch.sock} is too long for a unix socket, shorten XDG_STATE_HOME")
+        return launch
+
+    def create(self, hook: Path) -> None:
+        self.dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.dir.mkdir(mode=0o700)
+        self.tmp.mkdir(mode=0o700)
+        for stub, mode in ((self.before, "before"), (self.after, "after")):
+            stub.write_text(f"#!/bin/sh\nexec {shlex.quote(str(hook))} {mode} {shlex.quote(str(self.dir))}\n")
+            stub.chmod(0o700)
+
+
+def note(message: str) -> None:
+    print(f"nono-git-profile: {message}", file=sys.stderr)
+
+
+def run(cmd: list[str], timeout: float | None = None) -> str | None:
+    """Stdout of a successful command, or None if it failed, timed out or is missing."""
+    try:
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def parse_remote(url: str) -> tuple[str, str] | None:
+    """(host, "owner/repo") for an https, ssh or scp-style git URL, else None.
+
+    Never echo the URL itself: https remotes can carry a token in the userinfo.
+    """
+    url = url.strip()
+    match = _URL_FORM.match(url) or _SCP_FORM.match(url)
+    if not match:
+        return None
+    path = match["path"].strip("/").removesuffix(".git")
+    parts = path.split("/")
+    if len(parts) != 2 or not all(parts):
+        return None
+    return match["host"].lower(), path
+
+
+def origin_remote(cwd: str, runner=run) -> tuple[str, str] | None:
+    """(host, slug) of origin, with insteadOf rewrites applied, or None."""
+    url = runner(["git", "-C", cwd, "remote", "get-url", "origin"])
+    return parse_remote(url) if url else None
+
+
+def identity(cwd: str, runner=run) -> dict[str, str]:
+    """git author and committer from the host's config: the sandboxed git has no global config."""
+    name = (runner(["git", "-C", cwd, "config", "user.name"]) or "").strip()
+    email = (runner(["git", "-C", cwd, "config", "user.email"]) or "").strip()
+    if not (name and email):
+        return {}
+    return {
+        "GIT_AUTHOR_NAME": name,
+        "GIT_AUTHOR_EMAIL": email,
+        "GIT_COMMITTER_NAME": name,
+        "GIT_COMMITTER_EMAIL": email,
+    }
+
+
+def endpoint_rules(write_slug: str | None) -> list[dict[str, str]]:
+    """git's smart-HTTP requests. Every repo may be read (* is one path segment, so this
+    covers both /o/r.git/... and /o/r/...), and only write_slug may be pushed to. git sends
+    the path as written in the remote URL, so the push rule covers both forms too."""
+    rules = [
+        {"method": "GET", "path": "/*/*/info/refs"},
+        {"method": "POST", "path": "/*/*/git-upload-pack"},
+    ]
+    if write_slug:
+        for repo in (f"/{write_slug}.git", f"/{write_slug}"):
+            rules.append({"method": "POST", "path": f"{repo}/git-receive-pack"})
+    return rules
+
+
+def git_config_env(pairs: list[tuple[str, str]]) -> dict[str, str]:
+    """git config entries as GIT_CONFIG_COUNT/KEY_n/VALUE_n, which need no config file."""
+    env = {"GIT_CONFIG_COUNT": str(len(pairs))}
+    for i, (key, value) in enumerate(pairs):
+        env[f"GIT_CONFIG_KEY_{i}"] = key
+        env[f"GIT_CONFIG_VALUE_{i}"] = value
+    return env
+
+
+def build_profile(write_slug: str | None, bases: list[str], env: dict[str, str], launch: Launch | None = None) -> dict:
+    # nono refuses to start with tls_intercept and no proxy feature, so it travels with the grant.
+    body: dict = {
+        "extends": bases,
+        "network": {"tls_intercept": {"ca_lifecycle": "session", "ca_validity": CA_VALIDITY}},
+    }
+    sandbox: dict = {
+        "credentials": [
+            {"name": CREDENTIAL, "endpoint_policy": {"default": "deny", "allow": endpoint_rules(write_slug)}}
+        ]
+    }
+    env = dict(env)
+    if launch:
+        body["session_hooks"] = {
+            "before": {"script": str(launch.before), "timeout_secs": BEFORE_TIMEOUT},
+            "after": {"script": str(launch.after), "timeout_secs": AFTER_TIMEOUT},
+        }
+        # The before hook exports TMPDIR=<dir>/tmp to the session, which needs to write there.
+        body["filesystem"] = {"allow": [str(launch.tmp)]}
+        # The agent's socket does not exist yet when nono compiles this, so it is granted by
+        # name (a local-socket credential would be refused as missing), and git writes its
+        # signing temp files to TMPDIR.
+        sandbox["unix_socket_bind"] = [str(launch.sock)]
+        sandbox["fs_write"] = [str(launch.dir)]
+        sandbox["fs_read_file"] = [SSH_KEYGEN]
+        env["SSH_AUTH_SOCK"] = str(launch.sock)
+        env["TMPDIR"] = str(launch.tmp)
+        env.update(
+            git_config_env(
+                [
+                    ("commit.gpgsign", "true"),
+                    ("gpg.format", "ssh"),
+                    ("gpg.ssh.program", SSH_KEYGEN),
+                    ("user.signingkey", str(launch.pubkey)),
+                ]
+            )
+        )
+    if env:
+        sandbox["environment"] = {"set_vars": env}
+    body["command_policies"] = {"commands": {"git": {"sandbox": sandbox}}}
+    if launch:
+        name = f"git-{launch.dir.name}"
+    else:
+        name = "git-" + hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:12]
+    meta = {"name": name, "description": "Generated by nono-git-profile; do not edit"}
+    return {"meta": meta, **body}
+
+
+def sweep(state: Path, now: float | None = None) -> None:
+    """Remove launch dirs whose session is gone without the after hook having run
+    (nono killed, machine rebooted). A running session has an agent pid to find."""
+    now = time.time() if now is None else now
+    if not state.is_dir():
+        return
+    for entry in state.iterdir():
+        if not (_LAUNCH_ID.match(entry.name) and entry.is_dir()):
+            continue
+        pid_file = entry / "pid"
+        if pid_file.exists():
+            try:
+                os.kill(int(pid_file.read_text().strip()), 0)
+                continue  # agent still running, the session is live
+            except PermissionError:
+                continue
+            except (ValueError, ProcessLookupError, OSError):
+                pass
+        elif now - entry.stat().st_mtime < ORPHAN_AFTER:
+            continue  # just generated, nono has not started it yet
+        shutil.rmtree(entry, ignore_errors=True)
+
+
+def write_json(path: Path, profile: dict) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(profile, indent=2) + "\n")
+    os.replace(tmp, path)
+
+
+def validate(path: Path) -> bool:
+    nono = shutil.which("nono")
+    if not nono:
+        note("nono not found on PATH, skipping validation")
+        return True
+    done = subprocess.run([nono, "profile", "validate", str(path)], capture_output=True, text=True)
+    if done.returncode:
+        text = re.sub(r"\x1b\[[0-9;]*m", "", done.stdout + done.stderr)
+        note(f"nono rejected the generated profile {path}:\n{text.strip()}")
+        return False
+    return True
+
+
+def default_bases() -> list[str]:
+    """agent-base and nono's claude pack, plus hc access when running inside a herdr terminal
+    (herdr sets HC_TERMINAL_ID there). Outside herdr the agent gets no way to reach herdr-core."""
+    bases = ["agent-base", "nolabs-ai/claude"]
+    if os.environ.get("HC_TERMINAL_ID"):
+        bases.insert(1, HERDR_BASE)
+    return bases
+
+
+def default_hook() -> Path:
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return config / "nono" / "hooks" / HOOK_NAME
+
+
+def main(argv: list[str] | None = None, runner=run) -> int:
+    parser = argparse.ArgumentParser(description="Emit a nono profile for mediated git: read any repo, push only to origin.")
+    parser.add_argument("--cwd", default=".", help="directory inside the repo (default: current)")
+    parser.add_argument("--push", action="store_true", help="also allow git push to origin")
+    parser.add_argument("--base", action="append", help="profile to extend, repeatable, replaces the default (agent-base, nolabs-ai/claude, and herdr inside herdr)")
+    parser.add_argument("--no-sign", action="store_true", help="no signing agent: no hooks, no launch directory")
+    parser.add_argument("--hook", type=Path, default=None, help=f"session hook (default: nono's hooks dir/{HOOK_NAME})")
+    parser.add_argument("--state-dir", type=Path, help="where to keep launch dirs (default: $XDG_STATE_HOME/nono-git-profile)")
+    parser.add_argument("--json", action="store_true", help="print the profile instead of writing it")
+    args = parser.parse_args(argv)
+
+    cwd = str(Path(args.cwd).resolve())
+    state = args.state_dir or Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "nono-git-profile"
+
+    origin = origin_remote(cwd, runner)
+    write_slug = None
+    if args.push:
+        if origin and origin[0] == GITHUB_HOST:
+            write_slug = origin[1]
+        elif origin:
+            note(f"--push given but origin is on {origin[0]}, only {GITHUB_HOST} is mediated: nothing is writable")
+        else:
+            note("--push given but there is no origin remote: nothing is writable")
+    note(f"reads: any {GITHUB_HOST} repo the token can read")
+    note(f"writes: {write_slug}" if write_slug else "writes: none" + ("" if args.push else " (--push allows origin)"))
+
+    hook = args.hook or default_hook()
+    launch = None if args.no_sign else Launch.new(state)
+    if launch and not args.json and not hook.is_file():
+        note(f"session hook {hook} is missing, run chezmoi apply (or pass --no-sign)")
+        return 1
+
+    bases = args.base or default_bases()
+    if HERDR_BASE in bases:
+        note("inside herdr: the agent can use hc")
+    profile = build_profile(write_slug, bases, identity(cwd, runner), launch)
+    if args.json:
+        print(json.dumps(profile, indent=2))
+        return 0
+
+    sweep(state)
+    if launch:
+        launch.create(hook)
+        path = launch.profile
+    else:
+        path = state / "profiles" / f"{profile['meta']['name']}.json"
+    write_json(path, profile)
+    if not validate(path):
+        if launch:
+            shutil.rmtree(launch.dir, ignore_errors=True)
+        return 1
+    print(path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

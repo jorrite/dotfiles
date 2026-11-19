@@ -2,12 +2,12 @@
 # Discovers which repo this session should be scoped to, for the msb-based
 # sandbox: cwd's own git remotes (origin = full read/write, upstream = read
 # + PR-create only). Outside a git repo nothing git-specific is scoped, but
-# cwd is still reported so cs-launch mounts and cds into it regardless
+# cwd is still reported so cs-launch-msb mounts and cds into it regardless
 # (confirmed live: without this, the sandbox fell back to msb's own
 # default workdir instead of the pane's real one).
 #
 # Prints shell variable assignments to stdout, meant to be eval'd by the
-# caller (cs-launch), not executed directly.
+# caller (cs-launch-msb), not executed directly.
 set -euo pipefail
 
 parse_owner_repo() {
@@ -48,7 +48,7 @@ if [ -n "$TOPLEVEL" ]; then
     # but the main repo wasn't, so git inside the sandbox followed the
     # pointer to a path that didn't exist there and failed outright). For
     # an ordinary (non-worktree) checkout this is just $TOPLEVEL/.git, so
-    # its parent is $TOPLEVEL itself -- cs-launch skips a redundant mount
+    # its parent is $TOPLEVEL itself -- cs-launch-msb skips a redundant mount
     # in that case.
     common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
     [ -n "$common_dir" ] && MAIN_REPO_PATH="$(dirname "$common_dir")"

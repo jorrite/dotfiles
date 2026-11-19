@@ -31,6 +31,7 @@
 .config/nono/profiles/claude-code.json
 .config/nono/profiles/agent-sandbox-base.json
 .config/nono/profiles/agent-sandbox-session-*.json
+.config/nono/profiles/cs-session-*.json
 
 # Git reads both $XDG_CONFIG_HOME/git/config and ~/.gitconfig, with
 # ~/.gitconfig winning on any overlapping key (confirmed via `git config
