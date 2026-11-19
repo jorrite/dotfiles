@@ -73,7 +73,8 @@
       // command_policies.commands entry exists (nolabs-ai/nono#2247), so it is restated
       // here: the same set as nono's default, minus the entries that cannot be mediated
       // on macOS. doas, ftp, poweroff and srm do not exist there, and /usr/bin/sudo is
-      // execute-only (mode 4111), which nono cannot scan, so sudo stays unmediated.
+      // execute-only (mode 4111), which nono cannot scan, so sudo stays unmediated. xattr is
+      // added on top: it strips com.apple.quarantine.
       "rm": { "from": { "session": "deny" } },
       "rmdir": { "from": { "session": "deny" } },
       "dd": { "from": { "session": "deny" } },
@@ -88,6 +89,7 @@
       "sftp": { "from": { "session": "deny" } },
       "xargs": { "from": { "session": "deny" } },
       "su": { "from": { "session": "deny" } },
+      "xattr": { "from": { "session": "deny" } },
       "pip": { "from": { "session": "deny" } },
       "npm": { "from": { "session": "deny" } },
       "kill": { "from": { "session": "deny" } },
