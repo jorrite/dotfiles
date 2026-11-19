@@ -12,7 +12,7 @@ mise_tools:
     just: "latest"
     microsandbox: "latest"
     node: "latest"
-    nono: "latest"
+    nono: "0.82.0"
     npm: "latest"
     pre-commit: "latest"
     prettier: "latest"
