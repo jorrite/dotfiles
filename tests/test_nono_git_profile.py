@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "dot_local" / "bin" / "executable_nono-git-profile"
 HOOK = ROOT / "dot_config" / "nono" / "hooks" / "executable_git-session-hook"
 BASE = ROOT / "dot_config" / "nono" / "profiles" / "agent-base.json"
+HERDR = ROOT / "dot_config" / "nono" / "profiles" / "herdr.json"
 
 _loader = importlib.machinery.SourceFileLoader("nono_git_profile", str(GENERATOR))
 _spec = importlib.util.spec_from_loader("nono_git_profile", _loader)
@@ -180,18 +181,26 @@ class BuildProfile(unittest.TestCase):
 
 
 class DefaultBases(unittest.TestCase):
-    def extends(self, *args):
-        with tempfile.TemporaryFile("w+") as out:
-            with mock.patch("sys.stdout", out):
-                self.assertEqual(ngp.main(["--json", "--no-sign", "--cwd", "/nonexistent", *args]), 0)
-            out.seek(0)
-            return json.loads(out.read())["extends"]
+    def extends(self, *args, herdr=False):
+        env = {"HC_TERMINAL_ID": "t7"} if herdr else {}
+        with mock.patch.dict(os.environ, env):
+            if not herdr:
+                os.environ.pop("HC_TERMINAL_ID", None)
+            with tempfile.TemporaryFile("w+") as out:
+                with mock.patch("sys.stdout", out):
+                    self.assertEqual(ngp.main(["--json", "--no-sign", "--cwd", "/nonexistent", *args]), 0)
+                out.seek(0)
+                return json.loads(out.read())["extends"]
 
     def test_uses_nonos_claude_profile_by_default(self):
         self.assertEqual(self.extends(), ["agent-base", "nolabs-ai/claude"])
 
-    def test_base_replaces_the_default(self):
-        self.assertEqual(self.extends("--base", "agent-base"), ["agent-base"])
+    def test_hc_access_only_inside_herdr(self):
+        self.assertEqual(self.extends(herdr=True), ["agent-base", "herdr", "nolabs-ai/claude"])
+        self.assertNotIn("herdr", self.extends(herdr=False))
+
+    def test_base_replaces_the_default_even_inside_herdr(self):
+        self.assertEqual(self.extends("--base", "agent-base", herdr=True), ["agent-base"])
 
 
 class LaunchDir(unittest.TestCase):
@@ -248,7 +257,7 @@ class HookScript(unittest.TestCase):
         self.dir = self.tmp / "nono-git-profile" / "ab12cd34"
         (self.dir / "tmp").mkdir(parents=True)
         self.env_file = self.tmp / "env"
-        self.env = {**os.environ, "NONO_SIGNING_KEY_CMD": f"cat {self.key}", "NONO_ENV_FILE": str(self.env_file)}
+        self.env = {**os.environ, "NONO_SIGNING_KEY_CMD": f"cat {self.key}", "NONO_ENV_FILE": str(self.env_file), "NONO_WATCH_INTERVAL": "1"}
         self.addCleanup(self.kill_agent)
 
     def kill_agent(self):
@@ -291,6 +300,40 @@ class HookScript(unittest.TestCase):
                 self.assertEqual(done.returncode, 1)
                 self.assertTrue(bad.exists())
 
+    def test_after_is_idempotent(self):
+        shutil.rmtree(self.dir)
+        self.assertEqual(self.hook("after").returncode, 0)
+
+    def test_before_needs_the_launch_dir_to_exist(self):
+        shutil.rmtree(self.dir)
+        self.assertEqual(self.hook("before").returncode, 1)
+
+    def test_watcher_cleans_up_when_nono_is_killed_without_running_after(self):
+        # The parent of the hook stands in for nono. herdr ends a worker by killing it.
+        nono = subprocess.Popen(["sh", "-c", f'"{HOOK}" before "{self.dir}"; exec sleep 120'], env=self.env)
+        self.addCleanup(lambda: nono.poll() is None and nono.kill())
+        for _ in range(100):
+            if (self.dir / "signing.pub").exists():
+                break
+            time.sleep(0.1)
+        self.assertTrue((self.dir / "signing.pub").exists(), "before never finished")
+        agent = int((self.dir / "pid").read_text())
+        nono.kill()
+        nono.wait()
+        for _ in range(150):
+            if not self.dir.exists():
+                break
+            time.sleep(0.1)
+        self.assertFalse(self.dir.exists(), "the watcher did not remove the launch dir")
+        for _ in range(50):
+            try:
+                os.kill(agent, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(agent, 0)
+
     def test_unknown_mode_fails(self):
         self.assertEqual(self.hook("bogus").returncode, 1)
 
@@ -325,9 +368,10 @@ class AgainstNono(unittest.TestCase):
             out.seek(0)
             return code, out.read().strip()
 
-    def test_base_profile_is_valid(self):
-        done = subprocess.run(["nono", "profile", "validate", str(BASE)], capture_output=True, text=True)
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+    def test_static_profiles_are_valid(self):
+        for profile in (BASE, HERDR):
+            done = subprocess.run(["nono", "profile", "validate", str(profile)], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, f"{profile.name}: {done.stdout}{done.stderr}")
 
     def test_signing_launch_is_valid_and_its_stubs_clean_up(self):
         code, printed = self.generate("--push")

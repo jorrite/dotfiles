@@ -1,0 +1,17 @@
+// Lets an agent in a nono sandbox use hc, herdr-core's CLI, and write the hand-off files of the
+// herdr workflow templates. nono skips a path that does not exist, so the lead has to create the
+// hand-off directory before it starts a child.
+//
+// The socket is a deliberate hole: whatever can talk to herdr-core can also run commands outside
+// the sandbox (hc exec, hc run, hc file write). Accepted until hc offers a narrower grant.
+{
+  "meta": {
+    "name": "herdr",
+    "description": "hc access and the herdr workflow hand-off directory"
+  },
+  "filesystem": {
+    "read": ["$HOME/.local/share/herdr-core", "$HOME/.config/herdr-core"],
+    "allow": ["$HOME/.local/state/herdr-work"],
+    "unix_socket": ["$HOME/.local/state/herdr-core/default/default.sock"]
+  }
+}
