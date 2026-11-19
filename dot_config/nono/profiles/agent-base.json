@@ -26,6 +26,23 @@
       "user_caches_macos"
     ]
   },
+  // Package caches (content-hashed, so a poisoned entry fails verification) and mise's
+  // tracking dir. Its trusted-configs sibling stays read-only so a session cannot mise trust.
+  // nono skips paths that do not exist, so this works on machines without all of them.
+  "filesystem": {
+    "allow": [
+      "$HOME/go/pkg/mod",
+      "$HOME/.npm",
+      "$HOME/.bun/install/cache",
+      "$HOME/.atmos",
+      "$HOME/.local/state/mise/tracked-configs"
+    ]
+  },
+  // terraform cannot read ~/.terraformrc or ~/.terraform.d here (credentials live there)
+  // and complains on every run, so it gets an empty CLI config instead.
+  "environment": {
+    "set_vars": { "TF_CLI_CONFIG_FILE": "/dev/null" }
+  },
   // The GitHub token is captured from the host's gh on the first request and never
   // enters the sandbox. GitHub wants Basic auth for git smart HTTP, so nono has to
   // send base64("x-access-token:<token>"). Capture names allow only [A-Za-z0-9_].
