@@ -27,6 +27,7 @@ GENERATOR = ROOT / "dot_local" / "bin" / "executable_nono-git-profile"
 HOOK = ROOT / "dot_config" / "nono" / "hooks" / "executable_git-session-hook"
 BASE = ROOT / "dot_config" / "nono" / "profiles" / "agent-base.json"
 HERDR = ROOT / "dot_config" / "nono" / "profiles" / "herdr.json"
+CS_LAUNCH = ROOT / "dot_local" / "bin" / "executable_cs-launch"
 
 _loader = importlib.machinery.SourceFileLoader("nono_git_profile", str(GENERATOR))
 _spec = importlib.util.spec_from_loader("nono_git_profile", _loader)
@@ -245,6 +246,61 @@ class LaunchDir(unittest.TestCase):
 
     def test_sweep_without_a_state_dir_is_fine(self):
         ngp.sweep(self.state / "missing")
+
+
+@unittest.skipUnless(Path("/bin/bash").exists(), "bash not installed")
+class CsLaunch(unittest.TestCase):
+    """cs-launch only glues nono-git-profile to nono run, so both are stubs that record their argv."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        stubs = {
+            "nono-git-profile": ("gen.args", "GEN_EXIT", "echo /fake/profile.json"),
+            "nono": ("nono.args", "NONO_EXIT", ""),
+        }
+        for name, (record, exit_var, extra) in stubs.items():
+            lines = ["#!/bin/sh", 'for a in "$@"; do printf "%s\\n" "$a"; done > "$REC/' + record + '"']
+            if extra:
+                lines.append(extra)
+            lines.append('exit "${' + exit_var + ':-0}"')
+            stub = self.tmp / name
+            stub.write_text("\n".join(lines) + "\n")
+            stub.chmod(0o755)
+
+    def run_cs(self, *args, **env):
+        full = {"PATH": f"{self.tmp}:/usr/bin:/bin", "REC": str(self.tmp), **env}
+        return subprocess.run(["/bin/bash", str(CS_LAUNCH), *args], env=full, capture_output=True, text=True)
+
+    def recorded(self, name):
+        path = self.tmp / name
+        return path.read_text().splitlines() if path.exists() else None
+
+    def test_defaults_to_claude_with_a_strict_sandbox(self):
+        self.assertEqual(self.run_cs().returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), [])
+        self.assertEqual(
+            self.recorded("nono.args"),
+            ["run", "--strict-broker-path", "--profile", "/fake/profile.json", "--allow-cwd", "--", "claude"],
+        )
+
+    def test_options_before_the_double_dash_go_to_the_profile_generator(self):
+        self.assertEqual(self.run_cs("--push", "--base", "agent-base").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--push", "--base", "agent-base"])
+        self.assertEqual(self.recorded("nono.args")[-1], "claude")
+
+    def test_a_command_after_the_double_dash_replaces_claude_and_keeps_its_arguments(self):
+        self.assertEqual(self.run_cs("--no-sign", "--", "bash", "-c", "echo hi there").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--no-sign"])
+        self.assertEqual(self.recorded("nono.args")[-4:], ["--", "bash", "-c", "echo hi there"])
+
+    def test_nothing_starts_when_the_profile_cannot_be_generated(self):
+        done = self.run_cs(GEN_EXIT="3")
+        self.assertEqual(done.returncode, 3)
+        self.assertIsNone(self.recorded("nono.args"))
+
+    def test_the_exit_code_of_the_agent_is_returned(self):
+        self.assertEqual(self.run_cs(NONO_EXIT="7").returncode, 7)
 
 
 @unittest.skipUnless(shutil.which("ssh-agent") and shutil.which("ssh-keygen"), "openssh not installed")

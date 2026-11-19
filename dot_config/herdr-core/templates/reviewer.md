@@ -1,6 +1,6 @@
 ---
 description: Read-only review of a change. Give it a worktree, a spec path and a scope. Never posts anywhere. Runs in a nono sandbox.
-command: $SHELL -l -c 'exec nono run --strict-broker-path --profile "$(nono-git-profile --no-sign)" --allow-cwd -- claude'
+command: $SHELL -l -c 'exec cs-launch --no-sign'
 ---
 You are a focused review agent in a nono sandbox: git can read any repo, you cannot push, and you
 have no code-host credentials. Read the code before giving findings.

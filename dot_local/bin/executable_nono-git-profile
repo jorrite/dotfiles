@@ -20,10 +20,11 @@ path the profile mentions in it. nono's before hook (dot_config/nono/hooks/git-s
 starts a private ssh-agent with the dedicated signing key there, and the after hook stops
 it and removes the whole directory. Pass --no-sign to skip all of that.
 
-  nono run --strict-broker-path --profile "$(nono-git-profile --push)" --allow-cwd -- claude
+  cs-launch --push
 
---strict-broker-path makes nono refuse to start when a directory on PATH is writable by the
-sandbox, because a planted binary there would later run outside it.
+cs-launch is nono run --strict-broker-path --profile "$(nono-git-profile --push)" --allow-cwd --
+claude. --strict-broker-path makes nono refuse to start when a directory on PATH is writable by
+the sandbox, because a planted binary there would later run outside it.
 
 It extends agent-base and the claude pack from nono (`nono pull nolabs-ai/claude`), and inside
 a herdr terminal (HC_TERMINAL_ID is set) also the herdr profile, which lets the agent use hc.

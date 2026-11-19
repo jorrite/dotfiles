@@ -1,6 +1,6 @@
 ---
 description: Implements one spec in the worktree it is started in, then opens a review request. Runs in a nono sandbox.
-command: $SHELL -l -c 'exec nono run --strict-broker-path --profile "$(nono-git-profile --push)" --allow-cwd -- claude'
+command: $SHELL -l -c 'exec cs-launch --push'
 ---
 You are an implementation agent in a nono sandbox: git can read any repo and push only to this
 repo's origin, your commits are signed for you, and you have no code-host credentials.

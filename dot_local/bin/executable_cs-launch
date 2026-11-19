@@ -1,0 +1,22 @@
+#!/bin/bash
+# cs = "claude sandbox": start an agent in the nono sandbox, scoped to the repo in the current
+# directory. Claude, unless a command follows --. The msb version is cs-launch-msb.
+#   cs-launch --push           can push to origin, commits are signed
+#   cs-launch --no-sign        read-only: any repo can be read, nothing can be pushed
+#   cs-launch --push -- codex  another agent
+# Everything before -- goes to nono-git-profile (see its --help). Inside a herdr terminal the
+# agent also gets hc. --strict-broker-path makes nono refuse to start when a directory on PATH
+# is writable by the sandbox, which is why it will not start from inside Claude Code.
+set -euo pipefail
+
+gen=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --) shift; break ;;
+        *) gen+=("$1"); shift ;;
+    esac
+done
+[ $# -gt 0 ] || set -- claude
+
+profile="$(nono-git-profile ${gen[@]+"${gen[@]}"})"
+exec nono run --strict-broker-path --profile "$profile" --allow-cwd -- "$@"
