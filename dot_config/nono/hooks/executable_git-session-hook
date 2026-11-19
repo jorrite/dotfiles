@@ -1,0 +1,45 @@
+#!/bin/bash
+# nono session hook for the profiles nono-git-profile generates. nono runs it outside the
+# sandbox. A hook config cannot pass arguments, so per-launch stubs written by the generator
+# call this with the launch directory they were made for:
+#   before <dir>  starts a private ssh-agent holding only the dedicated signing key
+#   after  <dir>  stops that agent and removes <dir>
+# The key is piped from 1Password into ssh-add and never written to a file. The 1Password
+# SSH agent is not involved. The agent drops the key after KEY_TTL even if nono is killed
+# before this hook gets to run.
+set -euo pipefail
+
+KEY_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pabtxxz4/private_key"
+KEY_TTL=1d
+# NONO_SIGNING_KEY_CMD replaces the 1Password read, for tests.
+KEY_CMD="${NONO_SIGNING_KEY_CMD:-op read '$KEY_OP_REF'}"
+
+mode="${1:?usage: git-session-hook before|after <launch dir>}"
+dir="${2:?usage: git-session-hook before|after <launch dir>}"
+
+# after does rm -rf, so only ever touch a launch directory made by the generator.
+parent="${dir%/*}"
+if ! [[ "${dir##*/}" =~ ^[0-9a-f]{8}$ && "${parent##*/}" == nono-git-profile && -d "$dir" ]]; then
+  echo "git-session-hook: refusing '$dir', not a nono-git-profile launch directory" >&2
+  exit 1
+fi
+
+case "$mode" in
+  before)
+    eval "$(ssh-agent -a "$dir/a" -s)" >/dev/null
+    echo "$SSH_AGENT_PID" > "$dir/pid"
+    sh -c "$KEY_CMD" | SSH_AUTH_SOCK="$dir/a" ssh-add -t "$KEY_TTL" - 2>/dev/null
+    # git signs with the public key and ssh-keygen finds the private half in the agent.
+    SSH_AUTH_SOCK="$dir/a" ssh-add -L | head -1 > "$dir/signing.pub"
+    # Becomes the session's TMPDIR, so what it writes is gone with the directory.
+    echo "TMPDIR=$dir/tmp" >> "$NONO_ENV_FILE"
+    ;;
+  after)
+    [ -f "$dir/pid" ] && kill "$(cat "$dir/pid")" 2>/dev/null || true
+    rm -rf "$dir"
+    ;;
+  *)
+    echo "git-session-hook: unknown mode '$mode'" >&2
+    exit 1
+    ;;
+esac
