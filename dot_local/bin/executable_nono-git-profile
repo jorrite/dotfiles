@@ -22,7 +22,8 @@ it and removes the whole directory. Pass --no-sign to skip all of that.
 
   nono run --profile "$(nono-git-profile --push)" --allow-cwd -- claude
 
-Add claude's own sandbox with --base agent-base --base nolabs-ai/claude.
+It extends agent-base and the claude pack from nono (`nono pull nolabs-ai/claude`); --base
+replaces that list.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from pathlib import Path
 
 GITHUB_HOST = "github.com"
 CREDENTIAL = "gh-git"  # defined in agent-base.json
-DEFAULT_BASE = "agent-base"
+DEFAULT_BASES = ["agent-base", "nolabs-ai/claude"]
 HOOK_NAME = "git-session-hook"
 SSH_KEYGEN = "/usr/bin/ssh-keygen"
 # nono never renews the proxy CA or the leaf certs under it, so intercepted requests fail
@@ -280,7 +281,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
     parser = argparse.ArgumentParser(description="Emit a nono profile for mediated git: read any repo, push only to origin.")
     parser.add_argument("--cwd", default=".", help="directory inside the repo (default: current)")
     parser.add_argument("--push", action="store_true", help="also allow git push to origin")
-    parser.add_argument("--base", action="append", help=f"profile to extend, repeatable (default: {DEFAULT_BASE})")
+    parser.add_argument("--base", action="append", help=f"profile to extend, repeatable, replaces the default ({', '.join(DEFAULT_BASES)})")
     parser.add_argument("--no-sign", action="store_true", help="no signing agent: no hooks, no launch directory")
     parser.add_argument("--hook", type=Path, default=None, help=f"session hook (default: nono's hooks dir/{HOOK_NAME})")
     parser.add_argument("--state-dir", type=Path, help="where to keep launch dirs (default: $XDG_STATE_HOME/nono-git-profile)")
@@ -308,7 +309,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         note(f"session hook {hook} is missing, run chezmoi apply (or pass --no-sign)")
         return 1
 
-    profile = build_profile(write_slug, args.base or [DEFAULT_BASE], identity(cwd, runner), launch)
+    profile = build_profile(write_slug, args.base or DEFAULT_BASES, identity(cwd, runner), launch)
     if args.json:
         print(json.dumps(profile, indent=2))
         return 0

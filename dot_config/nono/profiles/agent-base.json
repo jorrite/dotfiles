@@ -11,6 +11,21 @@
     "description": "Mediated git over HTTPS plus the default command blocklist; extended by generated profiles"
   },
   "extends": "default",
+  // nono's built-in toolchain groups, so mise and what it installs can run. Groups rather
+  // than the *-dev profiles, which also switch on a network allow-list.
+  "groups": {
+    "include": [
+      "mise_manager",
+      "go_runtime",
+      "go_runtime_macos",
+      "python_runtime",
+      "node_runtime",
+      "bun_runtime",
+      "rust_runtime",
+      "java_runtime",
+      "user_caches_macos"
+    ]
+  },
   // The GitHub token is captured from the host's gh on the first request and never
   // enters the sandbox. GitHub wants Basic auth for git smart HTTP, so nono has to
   // send base64("x-access-token:<token>"). Capture names allow only [A-Za-z0-9_].

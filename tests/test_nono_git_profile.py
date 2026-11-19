@@ -179,6 +179,21 @@ class BuildProfile(unittest.TestCase):
         self.assertEqual(env, {"GIT_AUTHOR_NAME": "A"})
 
 
+class DefaultBases(unittest.TestCase):
+    def extends(self, *args):
+        with tempfile.TemporaryFile("w+") as out:
+            with mock.patch("sys.stdout", out):
+                self.assertEqual(ngp.main(["--json", "--no-sign", "--cwd", "/nonexistent", *args]), 0)
+            out.seek(0)
+            return json.loads(out.read())["extends"]
+
+    def test_uses_nonos_claude_profile_by_default(self):
+        self.assertEqual(self.extends(), ["agent-base", "nolabs-ai/claude"])
+
+    def test_base_replaces_the_default(self):
+        self.assertEqual(self.extends("--base", "agent-base"), ["agent-base"])
+
+
 class LaunchDir(unittest.TestCase):
     def setUp(self):
         self.state = short_tmp() / "nono-git-profile"
@@ -306,7 +321,7 @@ class AgainstNono(unittest.TestCase):
     def generate(self, *extra):
         with tempfile.TemporaryFile("w+") as out:
             with mock.patch("sys.stdout", out):
-                code = ngp.main(["--cwd", str(self.repo), "--state-dir", str(self.state), *extra])
+                code = ngp.main(["--cwd", str(self.repo), "--state-dir", str(self.state), *([] if "--base" in extra else ["--base", "agent-base"]), *extra])
             out.seek(0)
             return code, out.read().strip()
 
