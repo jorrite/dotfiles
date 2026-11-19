@@ -1,5 +1,6 @@
 #!/bin/bash
-# cs = "claude sandbox": scopes the current session to its own repo via
+# cs-launch-msb: the msb version of cs-launch, kept until it is binned. cs-launch itself
+# starts claude in the nono sandbox now. Scopes the current session to its own repo via
 # agent-sandbox-profile, then launches Claude Code inside an msb-sandboxed
 # VM instead of the real binary. nono no longer sandboxes the host process
 # directly -- the whole exec-containment job moved to msb's VM boundary,
