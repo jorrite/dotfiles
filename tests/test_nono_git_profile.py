@@ -218,6 +218,19 @@ class GhPolicy(unittest.TestCase):
         profile = ngp.build_profile(None, ["agent-base"], {})
         self.assertEqual(profile["command_policies"]["commands"]["gh"]["from"]["session"]["invocation_policy"]["default"], "deny")
 
+    def test_gh_can_read_its_installed_extensions_in_both_modes(self):
+        # Without this gh treats installed extensions as missing and offers to install them.
+        for write_slug in ("jorrite/atmos", None):
+            sandbox = ngp.build_profile(write_slug, ["agent-base"], {})["command_policies"]["commands"]["gh"]["from"]["session"]["sandbox"]
+            self.assertIn("$HOME/.local/share/gh/extensions", sandbox["fs_read"])
+            self.assertFalse([p for p in sandbox.get("fs_write", []) if "gh/extensions" in p])  # read, never write
+
+    def test_extensions_stay_denied_without_a_write_target(self):
+        # An extension talks GraphQL itself, which the endpoint policy cannot tell from a mutation.
+        allowed = [rule["argv"]["prefix"] for rule in ngp.gh_invocation_policy(write=False)["allow"]]
+        for name in ("stack", "actions-lock", "extension"):
+            self.assertFalse([a for a in allowed if a[0] == name])
+
 
 class BuildProfile(unittest.TestCase):
     launch = ngp.Launch(Path("/s/nono-git-profile/ab12cd34"))
