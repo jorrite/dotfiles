@@ -91,15 +91,16 @@
       // here: the same set as nono's default, minus the entries that cannot be mediated
       // on macOS. doas, ftp, poweroff and srm do not exist there, and /usr/bin/sudo is
       // execute-only (mode 4111), which nono cannot scan, so sudo stays unmediated. xattr is
-      // added on top: it strips com.apple.quarantine.
-      "rm": { "from": { "session": "deny" } },
+      // added on top: it strips com.apple.quarantine. rm, cp and mv are not denied: each runs
+      // in its own sandbox that can only touch the directory the session was started in.
+      "rm": { "sandbox": { "fs_read": ["$WORKDIR"], "fs_write": ["$WORKDIR"] } },
       "rmdir": { "from": { "session": "deny" } },
       "dd": { "from": { "session": "deny" } },
       "chmod": { "from": { "session": "deny" } },
       "chown": { "from": { "session": "deny" } },
       "chgrp": { "from": { "session": "deny" } },
-      "mv": { "from": { "session": "deny" } },
-      "cp": { "from": { "session": "deny" } },
+      "mv": { "sandbox": { "fs_read": ["$WORKDIR"], "fs_write": ["$WORKDIR"] } },
+      "cp": { "sandbox": { "fs_read": ["$WORKDIR"], "fs_write": ["$WORKDIR"] } },
       "truncate": { "from": { "session": "deny" } },
       "scp": { "from": { "session": "deny" } },
       "rsync": { "from": { "session": "deny" } },
