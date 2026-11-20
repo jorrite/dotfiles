@@ -11,8 +11,14 @@ profile for the sandboxed `git`:
   reads    any github.com repo, public or private (the token decides what exists)
   writes   origin of the repo at --cwd, and only with --push
 
+gh is mediated too, with a placeholder token: reads are open, and so is GraphQL, because the
+proxy cannot look inside a request (an accepted risk: with --push gh can write anywhere the
+token can via GraphQL). REST writes are limited to origin, plus a pull request on the upstream
+(the upstream remote, or else the repo origin was forked from). Without --push gh only gets
+read subcommands.
+
 The profile extends a static base (dot_config/nono/profiles/agent-base.json) that
-holds the credential and the git sandbox, so only the write target is generated here.
+holds the credentials and the git sandbox, so only the write targets are generated here.
 
 Commits are signed. For that the generator makes a launch directory under
 $XDG_STATE_HOME/nono-git-profile/<id>/ and puts the profile, two hook stubs and every
@@ -49,6 +55,36 @@ from pathlib import Path
 
 GITHUB_HOST = "github.com"
 CREDENTIAL = "gh-git"  # defined in agent-base.json
+GH_CREDENTIAL = "gh-api"  # defined in agent-base.json
+GH_TIMEOUT = 15
+# What the gh command sandbox may read: its config (hosts.yml holds no token, that is in the
+# keyring), the working directory, and mise, since gh is usually a mise shim.
+GH_FS_READ = [
+    "$WORKDIR", "$HOME/.config/gh", "$HOME/.config/mise", "$HOME/.local/share/mise", "/etc/mise", "/opt/homebrew",
+]
+GH_ENV_VARS = ["HOME", "PATH", "USER", "LANG", "LC_*", "TERM"]
+# Without a write target gh only gets these subcommands. api is in because it is how review
+# comments are read; its writes are stopped by the endpoint policy, and GraphQL by argv.
+GH_READ_ONLY = [
+    ["pr", "view"], ["pr", "list"], ["pr", "status"], ["pr", "checks"], ["pr", "diff"],
+    ["issue", "view"], ["issue", "list"], ["issue", "status"],
+    ["repo", "view"], ["repo", "list"], ["run", "list"], ["run", "view"],
+    ["workflow", "list"], ["workflow", "view"], ["release", "list"], ["release", "view"],
+    ["label", "list"], ["gist", "list"], ["gist", "view"],
+    ["search"], ["status"], ["api"], ["auth", "status"], ["version"], ["--version"], ["help"], ["--help"],
+]
+# With a write target gh may do anything except these.
+GH_DENY = [
+    (["auth", "login"], "changes the authenticated account"),
+    (["auth", "logout"], "changes the authenticated account"),
+    (["auth", "switch"], "changes the authenticated account"),
+    (["auth", "refresh"], "changes token scopes"),
+    (["auth", "setup-git"], "rewrites git's credential helper"),
+    (["auth", "token"], "prints a token"),
+    (["extension"], "installs and runs code"),
+    (["alias"], "can define shell aliases"),
+    (["repo", "delete"], "deletes a repository"),
+]
 HERDR_BASE = "herdr"
 HOOK_NAME = "git-session-hook"
 SSH_KEYGEN = "/usr/bin/ssh-keygen"
@@ -143,10 +179,36 @@ def parse_remote(url: str) -> tuple[str, str] | None:
     return match["host"].lower(), path
 
 
-def origin_remote(cwd: str, runner=run) -> tuple[str, str] | None:
-    """(host, slug) of origin, with insteadOf rewrites applied, or None."""
-    url = runner(["git", "-C", cwd, "remote", "get-url", "origin"])
+def remote_slug(cwd: str, name: str, runner=run) -> tuple[str, str] | None:
+    """(host, slug) of a remote, with insteadOf rewrites applied, or None."""
+    url = runner(["git", "-C", cwd, "remote", "get-url", name])
     return parse_remote(url) if url else None
+
+
+def origin_remote(cwd: str, runner=run) -> tuple[str, str] | None:
+    return remote_slug(cwd, "origin", runner)
+
+
+def fork_parent(slug: str, runner=run) -> str | None:
+    """The repo a fork was forked from, or None: not a fork, or the lookup failed."""
+    out = runner(["gh", "api", f"repos/{slug}"], timeout=GH_TIMEOUT)
+    try:
+        data = json.loads(out) if out else None
+    except ValueError:
+        return None
+    parent = ((data or {}).get("parent") or {}).get("full_name") if isinstance(data, dict) else None
+    return parent or None
+
+
+def pr_targets(cwd: str, origin_slug: str, runner=run) -> list[str]:
+    """Where pull requests may be opened besides origin: the upstream remote, or else the
+    repo origin was forked from."""
+    upstream = remote_slug(cwd, "upstream", runner)
+    if upstream and upstream[0] == GITHUB_HOST:
+        found = upstream[1]
+    else:
+        found = fork_parent(origin_slug, runner)
+    return [found] if found and found.lower() != origin_slug.lower() else []
 
 
 def identity(cwd: str, runner=run) -> dict[str, str]:
@@ -177,6 +239,58 @@ def endpoint_rules(write_slug: str | None) -> list[dict[str, str]]:
     return rules
 
 
+def gh_endpoint_rules(write_slug: str | None, targets: list[str]) -> list[dict[str, str]]:
+    """What the proxy lets gh send to api.github.com. Reads are open. GraphQL has to be open
+    because gh does nearly everything through it, and the proxy cannot look inside a request,
+    so it is open for writes too: an accepted risk, not an oversight. REST writes are
+    limited to the write target, and a pull request to the upstream."""
+    rules = [{"method": "GET", "path": "/**"}, {"method": "POST", "path": "/graphql"}]
+    if write_slug:
+        for method in ("POST", "PATCH", "PUT", "DELETE"):
+            rules.append({"method": method, "path": f"/repos/{write_slug}"})
+            rules.append({"method": method, "path": f"/repos/{write_slug}/**"})
+    for target in targets:
+        rules.append({"method": "POST", "path": f"/repos/{target}/pulls"})
+    return rules
+
+
+def gh_invocation_policy(write: bool) -> dict:
+    if write:
+        return {
+            "default": "allow",
+            "deny": [{"argv": {"prefix": args}, "reason": why} for args, why in GH_DENY],
+        }
+    return {
+        "default": "deny",
+        "allow": [{"argv": {"prefix": args}, "reason": "read-only"} for args in GH_READ_ONLY],
+        "deny": [
+            {"argv": {"contains": ["graphql"]}, "reason": "GraphQL mutations cannot be told from queries"},
+            {"argv": {"contains": ["/graphql"]}, "reason": "GraphQL mutations cannot be told from queries"},
+        ],
+    }
+
+
+def gh_command(write_slug: str | None, targets: list[str]) -> dict:
+    return {
+        "can_use": ["git"],
+        "from": {
+            "session": {
+                "sandbox": {
+                    "fs_read": GH_FS_READ,
+                    "credentials": [
+                        {
+                            "name": GH_CREDENTIAL,
+                            "endpoint_policy": {"default": "deny", "allow": gh_endpoint_rules(write_slug, targets)},
+                        }
+                    ],
+                    "environment": {"allow_vars": GH_ENV_VARS},
+                },
+                "invocation_policy": gh_invocation_policy(bool(write_slug)),
+            }
+        },
+    }
+
+
 def git_config_env(pairs: list[tuple[str, str]]) -> dict[str, str]:
     """git config entries as GIT_CONFIG_COUNT/KEY_n/VALUE_n, which need no config file."""
     env = {"GIT_CONFIG_COUNT": str(len(pairs))}
@@ -186,7 +300,13 @@ def git_config_env(pairs: list[tuple[str, str]]) -> dict[str, str]:
     return env
 
 
-def build_profile(write_slug: str | None, bases: list[str], env: dict[str, str], launch: Launch | None = None) -> dict:
+def build_profile(
+    write_slug: str | None,
+    bases: list[str],
+    env: dict[str, str],
+    launch: Launch | None = None,
+    targets: list[str] | None = None,
+) -> dict:
     # nono refuses to start with tls_intercept and no proxy feature, so it travels with the grant.
     body: dict = {
         "extends": bases,
@@ -225,7 +345,9 @@ def build_profile(write_slug: str | None, bases: list[str], env: dict[str, str],
         )
     if env:
         sandbox["environment"] = {"set_vars": env}
-    body["command_policies"] = {"commands": {"git": {"sandbox": sandbox}}}
+    body["command_policies"] = {
+        "commands": {"git": {"sandbox": sandbox}, "gh": gh_command(write_slug, targets or [])}
+    }
     if launch:
         name = f"git-{launch.dir.name}"
     else:
@@ -292,7 +414,7 @@ def default_hook() -> Path:
 
 
 def main(argv: list[str] | None = None, runner=run) -> int:
-    parser = argparse.ArgumentParser(description="Emit a nono profile for mediated git: read any repo, push only to origin.")
+    parser = argparse.ArgumentParser(description="Emit a nono profile for mediated git and gh: read any repo, write only to origin.")
     parser.add_argument("--cwd", default=".", help="directory inside the repo (default: current)")
     parser.add_argument("--push", action="store_true", help="also allow git push to origin")
     parser.add_argument("--base", action="append", help="profile to extend, repeatable, replaces the default (agent-base, nolabs-ai/claude, and herdr inside herdr)")
@@ -314,8 +436,11 @@ def main(argv: list[str] | None = None, runner=run) -> int:
             note(f"--push given but origin is on {origin[0]}, only {GITHUB_HOST} is mediated: nothing is writable")
         else:
             note("--push given but there is no origin remote: nothing is writable")
+    targets = pr_targets(cwd, write_slug, runner) if write_slug else []
     note(f"reads: any {GITHUB_HOST} repo the token can read")
     note(f"writes: {write_slug}" if write_slug else "writes: none" + ("" if args.push else " (--push allows origin)"))
+    if targets:
+        note(f"pull requests: {', '.join(targets)} besides origin")
 
     hook = args.hook or default_hook()
     launch = None if args.no_sign else Launch.new(state)
@@ -326,7 +451,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
     bases = args.base or default_bases()
     if HERDR_BASE in bases:
         note("inside herdr: the agent can use hc")
-    profile = build_profile(write_slug, bases, identity(cwd, runner), launch)
+    profile = build_profile(write_slug, bases, identity(cwd, runner), launch, targets)
     if args.json:
         print(json.dumps(profile, indent=2))
         return 0
