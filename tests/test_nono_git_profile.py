@@ -401,6 +401,42 @@ class CsLaunch(unittest.TestCase):
         self.assertEqual(self.recorded("gen.args"), ["--no-sign"])
         self.assertEqual(self.recorded("nono.args")[-4:], ["--", "bash", "-c", "echo hi there"])
 
+    def test_what_is_not_a_wrapper_option_goes_to_claude(self):
+        self.assertEqual(self.run_cs("--push", "--resume").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--push"])
+        self.assertEqual(self.recorded("nono.args")[-2:], ["claude", "--resume"])
+
+    def test_claude_options_with_values_and_a_prompt_keep_their_words(self):
+        self.assertEqual(self.run_cs("--no-sign", "-r", "abc", "--model", "opus", "fix the tests").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--no-sign"])
+        self.assertEqual(self.recorded("nono.args")[-6:], ["claude", "-r", "abc", "--model", "opus", "fix the tests"])
+
+    def test_wrapper_options_with_values_still_reach_the_generator_next_to_claude_options(self):
+        self.assertEqual(self.run_cs("--resume", "--cwd", "/some dir", "--base=agent-base", "--continue").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--cwd", "/some dir", "--base=agent-base"])
+        self.assertEqual(self.recorded("nono.args")[-3:], ["claude", "--resume", "--continue"])
+
+    def test_arguments_after_the_double_dash_belong_to_that_command_even_when_they_look_like_wrapper_ones(self):
+        self.assertEqual(self.run_cs("--push", "--", "codex", "--resume", "--push").returncode, 0)
+        self.assertEqual(self.recorded("gen.args"), ["--push"])
+        self.assertEqual(self.recorded("nono.args")[-4:], ["--", "codex", "--resume", "--push"])
+
+    def test_an_empty_double_dash_still_means_claude(self):
+        self.assertEqual(self.run_cs("--push", "--").returncode, 0)
+        self.assertEqual(self.recorded("nono.args")[-1], "claude")
+
+    def test_an_unknown_option_before_an_explicit_command_is_refused_and_nothing_starts(self):
+        done = self.run_cs("--resume", "--", "codex")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("--resume", done.stderr)
+        self.assertIsNone(self.recorded("gen.args"))
+        self.assertIsNone(self.recorded("nono.args"))
+
+    def test_a_wrapper_option_without_its_value_is_refused(self):
+        done = self.run_cs("--push", "--base")
+        self.assertEqual(done.returncode, 2)
+        self.assertIsNone(self.recorded("nono.args"))
+
     def test_nothing_starts_when_the_profile_cannot_be_generated(self):
         done = self.run_cs(GEN_EXIT="3")
         self.assertEqual(done.returncode, 3)
