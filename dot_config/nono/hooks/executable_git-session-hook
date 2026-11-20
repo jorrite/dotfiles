@@ -2,24 +2,26 @@
 # nono session hook for the profiles nono-git-profile generates. nono runs it outside the
 # sandbox. A hook config cannot pass arguments, so per-launch stubs written by the generator
 # call this with the launch directory they were made for:
-#   before <dir>  starts a private ssh-agent holding only the dedicated signing key
-#   after  <dir>  stops that agent and removes <dir>
-#   watch  <dir> <pid>  waits for <pid> to exit, then does what after does
+#   before <dir> [nosign]  makes <dir>/tmp the session's temp dir (TMPDIR, and Claude's own
+#                          tree via CLAUDE_CODE_TMPDIR), and unless nosign starts a private
+#                          ssh-agent holding only the dedicated signing key
+#   after  <dir>           stops that agent, if any, and removes <dir>
+#   watch  <dir> <pid>     waits for <pid> to exit, then does what after does
 # The key is piped from 1Password into ssh-add and never written to a file. The 1Password
 # SSH agent is not involved. herdr ends a worker by killing nono, which skips the after hook,
 # so before also starts a watcher in its own session that cleans up once nono is gone. The
-# agent drops the key after KEY_TTL no matter what.
+# agent drops the key after KEY_TTL no matter what; the directory stays as long as nono runs.
 set -euo pipefail
 
 KEY_OP_REF="op://afcfz2u36qbb4w5iikx4aol2z4/bxrngtq7ihbcxk23o5pabtxxz4/private_key"
 KEY_TTL=1d
-WATCH_MAX=86400 # as long as the key lives
 WATCH_INTERVAL="${NONO_WATCH_INTERVAL:-3}"
 # NONO_SIGNING_KEY_CMD replaces the 1Password read, for tests.
 KEY_CMD="${NONO_SIGNING_KEY_CMD:-op read '$KEY_OP_REF'}"
 
-mode="${1:?usage: git-session-hook before|after|watch <launch dir> [pid]}"
-dir="${2:?usage: git-session-hook before|after|watch <launch dir> [pid]}"
+usage="usage: git-session-hook before|after|watch <launch dir> [nosign|pid]"
+mode="${1:?$usage}"
+dir="${2:?$usage}"
 
 # after does rm -rf, so only ever touch a launch directory made by the generator.
 parent="${dir%/*}"
@@ -35,26 +37,33 @@ fi
 
 case "$mode" in
   before)
-    eval "$(ssh-agent -a "$dir/a" -s)" >/dev/null
-    echo "$SSH_AGENT_PID" > "$dir/pid"
-    sh -c "$KEY_CMD" | SSH_AUTH_SOCK="$dir/a" ssh-add -t "$KEY_TTL" - 2>/dev/null
-    # git signs with the public key and ssh-keygen finds the private half in the agent.
-    SSH_AUTH_SOCK="$dir/a" ssh-add -L | head -1 > "$dir/signing.pub"
-    # Becomes the session's TMPDIR, so what it writes is gone with the directory.
+    # Everything that keeps the directory from outliving the session comes first, so that a
+    # failed key load further down cannot leave it behind. $PPID is nono: `owner` is what
+    # tells the generator's sweep that the session is live, and what the watcher waits for.
+    echo "$PPID" > "$dir/owner"
+    # Becomes the session's TMPDIR, so what it writes is gone with the directory. Claude keeps
+    # its own tree (scratchpad, background task output) under CLAUDE_CODE_TMPDIR, which the
+    # claude pack points at the shared ~/.claude/tmp, so move that here too.
     echo "TMPDIR=$dir/tmp" >> "$NONO_ENV_FILE"
+    echo "CLAUDE_CODE_TMPDIR=$dir/tmp" >> "$NONO_ENV_FILE"
     # perl because macOS has no setsid, and the watcher must outlive a killed process group.
     perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$0" watch "$dir" "$PPID" </dev/null >/dev/null 2>&1 &
+    if [ "${3:-}" != nosign ]; then
+      eval "$(ssh-agent -a "$dir/a" -s)" >/dev/null
+      echo "$SSH_AGENT_PID" > "$dir/pid"
+      sh -c "$KEY_CMD" | SSH_AUTH_SOCK="$dir/a" ssh-add -t "$KEY_TTL" - 2>/dev/null
+      # git signs with the public key and ssh-keygen finds the private half in the agent.
+      SSH_AUTH_SOCK="$dir/a" ssh-add -L | head -1 > "$dir/signing.pub"
+    fi
     ;;
   after)
     [ -f "$dir/pid" ] && kill "$(cat "$dir/pid")" 2>/dev/null || true
     rm -rf "$dir"
     ;;
   watch)
-    pid="${3:?usage: git-session-hook watch <launch dir> <pid>}"
-    for ((i = 0; i < WATCH_MAX / WATCH_INTERVAL; i++)); do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep "$WATCH_INTERVAL"
-    done
+    pid="${3:?$usage}"
+    # No upper limit: the directory is the session's temp dir, so it lives as long as nono does.
+    while kill -0 "$pid" 2>/dev/null; do sleep "$WATCH_INTERVAL"; done
     exec "$0" after "$dir"
     ;;
   *)

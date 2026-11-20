@@ -20,11 +20,15 @@ read subcommands.
 The profile extends a static base (dot_config/nono/profiles/agent-base.json) that
 holds the credentials and the git sandbox, so only the write targets are generated here.
 
-Commits are signed. For that the generator makes a launch directory under
-$XDG_STATE_HOME/nono-git-profile/<id>/ and puts the profile, two hook stubs and every
-path the profile mentions in it. nono's before hook (dot_config/nono/hooks/git-session-hook)
-starts a private ssh-agent with the dedicated signing key there, and the after hook stops
-it and removes the whole directory. Pass --no-sign to skip all of that.
+Every launch gets a directory under $XDG_STATE_HOME/nono-git-profile/<id>/ that holds the
+profile, two hook stubs and everything the session writes: its temp dir (TMPDIR and
+CLAUDE_CODE_TMPDIR point there, so Claude's scratchpad and task output live in it too) and,
+when signing, the socket of a private ssh-agent. nono's before hook
+(dot_config/nono/hooks/git-session-hook) fills it in, and the after hook, or a watcher when
+nono is killed, removes the whole directory.
+
+Commits are signed with a dedicated key that the hook loads from 1Password into that agent,
+never onto disk. --no-sign skips the agent and the key, not the directory.
 
   cs-launch --push
 
@@ -97,7 +101,7 @@ CA_VALIDITY = "30d"
 MAX_SOCKET_PATH = 100  # sun_path is 104 bytes on macOS
 BEFORE_TIMEOUT = 120  # the 1Password read can wait for an approval
 AFTER_TIMEOUT = 15
-ORPHAN_AFTER = 3600  # a launch dir that never got an agent is stale after this many seconds
+ORPHAN_AFTER = 3600  # a launch dir whose before hook never ran is stale after this many seconds
 
 _URL_FORM = re.compile(
     r"^(?:https?|ssh|git|git\+ssh|ssh\+git)://(?:[^@/]*@)?(?P<host>[^/:]+)(?::\d+)?/(?P<path>.+)$"
@@ -108,9 +112,11 @@ _LAUNCH_ID = re.compile(r"^[0-9a-f]{8}$")
 
 @dataclass(frozen=True)
 class Launch:
-    """Everything one nono session owns. The session hooks remove it again."""
+    """Everything one nono session owns. The session hooks remove it again. Without `sign` it
+    holds no agent: the directory is still the session's temp dir and is still cleaned up."""
 
     dir: Path
+    sign: bool = True
 
     @property
     def sock(self) -> Path:
@@ -137,8 +143,8 @@ class Launch:
         return self.dir / "after.sh"
 
     @classmethod
-    def new(cls, state: Path, token: str | None = None) -> Launch:
-        launch = cls(state / (token or secrets.token_hex(4)))
+    def new(cls, state: Path, token: str | None = None, sign: bool = True) -> Launch:
+        launch = cls(state / (token or secrets.token_hex(4)), sign)
         if len(str(launch.sock)) > MAX_SOCKET_PATH:
             raise SystemExit(f"nono-git-profile: {launch.sock} is too long for a unix socket, shorten XDG_STATE_HOME")
         return launch
@@ -147,8 +153,10 @@ class Launch:
         self.dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.dir.mkdir(mode=0o700)
         self.tmp.mkdir(mode=0o700)
-        for stub, mode in ((self.before, "before"), (self.after, "after")):
-            stub.write_text(f"#!/bin/sh\nexec {shlex.quote(str(hook))} {mode} {shlex.quote(str(self.dir))}\n")
+        # A hook config takes no arguments, so what the hook is to do is written into the stub.
+        extra = "" if self.sign else " nosign"
+        for stub, mode, tail in ((self.before, "before", extra), (self.after, "after", "")):
+            stub.write_text(f"#!/bin/sh\nexec {shlex.quote(str(hook))} {mode} {shlex.quote(str(self.dir))}{tail}\n")
             stub.chmod(0o700)
 
 
@@ -325,8 +333,10 @@ def build_profile(
             "before": {"script": str(launch.before), "timeout_secs": BEFORE_TIMEOUT},
             "after": {"script": str(launch.after), "timeout_secs": AFTER_TIMEOUT},
         }
-        # The before hook exports TMPDIR=<dir>/tmp to the session, which needs to write there.
+        # The before hook exports TMPDIR and CLAUDE_CODE_TMPDIR=<dir>/tmp to the session, which
+        # needs to write there.
         body["filesystem"] = {"allow": [str(launch.tmp)]}
+    if launch and launch.sign:
         # The agent's socket does not exist yet when nono compiles this, so it is granted by
         # name (a local-socket credential would be refused as missing), and git writes its
         # signing temp files to TMPDIR.
@@ -359,19 +369,22 @@ def build_profile(
 
 
 def sweep(state: Path, now: float | None = None) -> None:
-    """Remove launch dirs whose session is gone without the after hook having run
-    (nono killed, machine rebooted). A running session has an agent pid to find."""
+    """Remove launch dirs whose session is gone without the after hook having run (nono
+    killed and the watcher too, machine rebooted). The before hook records nono's pid as
+    `owner` whether or not there is a signing agent, so that is what says a session is live.
+    Hooks from before `owner` existed only recorded the agent's pid in `pid`: sessions they
+    started can still be running when this version is first used, so that counts too."""
     now = time.time() if now is None else now
     if not state.is_dir():
         return
     for entry in state.iterdir():
         if not (_LAUNCH_ID.match(entry.name) and entry.is_dir()):
             continue
-        pid_file = entry / "pid"
-        if pid_file.exists():
+        pid_file = next((f for f in (entry / "owner", entry / "pid") if f.exists()), None)
+        if pid_file:
             try:
                 os.kill(int(pid_file.read_text().strip()), 0)
-                continue  # agent still running, the session is live
+                continue  # still running, the session is live
             except PermissionError:
                 continue
             except (ValueError, ProcessLookupError, OSError):
@@ -420,7 +433,7 @@ def main(argv: list[str] | None = None, runner=run) -> int:
     parser.add_argument("--cwd", default=".", help="directory inside the repo (default: current)")
     parser.add_argument("--push", action="store_true", help="also allow git push to origin")
     parser.add_argument("--base", action="append", help="profile to extend, repeatable, replaces the default (agent-base, nolabs-ai/claude, and herdr inside herdr)")
-    parser.add_argument("--no-sign", action="store_true", help="no signing agent: no hooks, no launch directory")
+    parser.add_argument("--no-sign", action="store_true", help="no signing agent and no 1Password prompt, commits are not signed (the launch directory stays: it is the session's temp dir)")
     parser.add_argument("--hook", type=Path, default=None, help=f"session hook (default: nono's hooks dir/{HOOK_NAME})")
     parser.add_argument("--state-dir", type=Path, help="where to keep launch dirs (default: $XDG_STATE_HOME/nono-git-profile)")
     parser.add_argument("--json", action="store_true", help="print the profile instead of writing it")
@@ -445,9 +458,9 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         note(f"pull requests: {', '.join(targets)} besides origin")
 
     hook = args.hook or default_hook()
-    launch = None if args.no_sign else Launch.new(state)
-    if launch and not args.json and not hook.is_file():
-        note(f"session hook {hook} is missing, run chezmoi apply (or pass --no-sign)")
+    launch = Launch.new(state, sign=not args.no_sign)
+    if not args.json and not hook.is_file():
+        note(f"session hook {hook} is missing, run chezmoi apply")
         return 1
 
     bases = args.base or default_bases()
@@ -459,17 +472,12 @@ def main(argv: list[str] | None = None, runner=run) -> int:
         return 0
 
     sweep(state)
-    if launch:
-        launch.create(hook)
-        path = launch.profile
-    else:
-        path = state / "profiles" / f"{profile['meta']['name']}.json"
-    write_json(path, profile)
-    if not validate(path):
-        if launch:
-            shutil.rmtree(launch.dir, ignore_errors=True)
+    launch.create(hook)
+    write_json(launch.profile, profile)
+    if not validate(launch.profile):
+        shutil.rmtree(launch.dir, ignore_errors=True)
         return 1
-    print(path)
+    print(launch.profile)
     return 0
 
 
