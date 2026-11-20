@@ -1,22 +1,40 @@
 #!/bin/bash
 # cs = "claude sandbox": start an agent in the nono sandbox, scoped to the repo in the current
 # directory. Claude, unless a command follows --. The msb version is cs-launch-msb.
-#   cs-launch --push           can push to origin, commits are signed
-#   cs-launch --no-sign        read-only: any repo can be read, nothing can be pushed
-#   cs-launch --push -- codex  another agent
-# Everything before -- goes to nono-git-profile (see its --help). Inside a herdr terminal the
-# agent also gets hc. --strict-broker-path makes nono refuse to start when a directory on PATH
-# is writable by the sandbox, which is why it will not start from inside Claude Code.
+#   cs-launch --push                  can push to origin, commits are signed
+#   cs-launch --no-sign               read-only: any repo can be read, nothing can be pushed
+#   cs-launch --push --resume         anything that is not an option below goes to claude
+#   cs-launch --no-sign -c            (--resume, -c, --model opus, a prompt, ...)
+#   cs-launch --push -- codex --yolo  another agent, with its own arguments
+# The options of nono-git-profile (--push --no-sign --base --cwd --hook --state-dir --json, see its
+# --help) are the wrapper's own. Inside a herdr terminal the agent also gets hc.
+# --strict-broker-path makes nono refuse to start when a directory on PATH is writable by the
+# sandbox, which is why it will not start from inside Claude Code.
 set -euo pipefail
 
-gen=()
+gen=()   # for nono-git-profile
+rest=()  # for claude
+cmd=()
+explicit=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --) shift; break ;;
-        *) gen+=("$1"); shift ;;
+        --) explicit=1; shift; cmd=("$@"); break ;;
+        --push|--no-sign|--json|-h|--help) gen+=("$1"); shift ;;
+        --cwd|--base|--hook|--state-dir)
+            [ $# -ge 2 ] || { echo "cs-launch: $1 needs a value" >&2; exit 2; }
+            gen+=("$1" "$2"); shift 2 ;;
+        --cwd=*|--base=*|--hook=*|--state-dir=*) gen+=("$1"); shift ;;
+        *) rest+=("$1"); shift ;;
     esac
 done
-[ $# -gt 0 ] || set -- claude
+
+if [ "$explicit" = 1 ]; then
+    # After -- comes a whole command, so there is no claude to hand the leftovers to.
+    [ ${#rest[@]} -eq 0 ] || { echo "cs-launch: unknown option before --: ${rest[*]} (arguments for the command go after it)" >&2; exit 2; }
+    [ ${#cmd[@]} -gt 0 ] || cmd=(claude)
+else
+    cmd=(claude ${rest[@]+"${rest[@]}"})
+fi
 
 profile="$(nono-git-profile ${gen[@]+"${gen[@]}"})"
-exec nono run --strict-broker-path --profile "$profile" --allow-cwd -- "$@"
+exec nono run --strict-broker-path --profile "$profile" --allow-cwd -- "${cmd[@]}"
