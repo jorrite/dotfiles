@@ -58,9 +58,11 @@ CREDENTIAL = "gh-git"  # defined in agent-base.json
 GH_CREDENTIAL = "gh-api"  # defined in agent-base.json
 GH_TIMEOUT = 15
 # What the gh command sandbox may read: its config (hosts.yml holds no token, that is in the
-# keyring), the working directory, and mise, since gh is usually a mise shim.
+# keyring), its installed extensions (without this gh treats them as not installed), the
+# working directory, and mise, since gh is usually a mise shim.
 GH_FS_READ = [
-    "$WORKDIR", "$HOME/.config/gh", "$HOME/.config/mise", "$HOME/.local/share/mise", "/etc/mise", "/opt/homebrew",
+    "$WORKDIR", "$HOME/.config/gh", "$HOME/.local/share/gh/extensions",
+    "$HOME/.config/mise", "$HOME/.local/share/mise", "/etc/mise", "/opt/homebrew",
 ]
 GH_ENV_VARS = ["HOME", "PATH", "USER", "LANG", "LC_*", "TERM"]
 # Without a write target gh only gets these subcommands. api is in because it is how review
