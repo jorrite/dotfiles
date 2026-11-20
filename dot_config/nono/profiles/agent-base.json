@@ -51,6 +51,12 @@
       "command": ["sh", "-c", "printf 'x-access-token:%s' \"$(gh auth token)\" | base64 | tr -d '\\n'"],
       "timeout_secs": 10,
       "cache_ttl_secs": 3600
+    },
+    // The same token for gh. It only ever reaches the proxy, gh gets a placeholder GH_TOKEN.
+    "gh_token": {
+      "command": ["sh", "-c", "gh auth token"],
+      "timeout_secs": 10,
+      "cache_ttl_secs": 3600
     }
   },
   "command_policies": {
@@ -63,6 +69,15 @@
         "credential_format": "Basic {}",
         "env_var": "GH_GIT_PHANTOM",
         "base_url_env_var": "GH_GIT_BASE_URL"
+      },
+      // The gh command and its endpoint policy are generated per launch, see nono-git-profile.
+      "gh-api": {
+        "type": "proxy",
+        "upstream": "https://api.github.com",
+        "credential_key": "cmd://gh_token",
+        "inject_header": "Authorization",
+        "credential_format": "token {}",
+        "env_var": "GH_TOKEN"
       }
     },
     "commands": {
@@ -82,6 +97,23 @@
               "GIT_TERMINAL_PROMPT": "0",
               "XDG_CONFIG_HOME": "/private/var/empty"
             }
+          }
+        },
+        // What gh sees when it calls git for repo discovery: local only, no network.
+        "from": {
+          "gh": {
+            "sandbox": {
+              "fs_read": ["$WORKDIR", "@git:common-dir", "/opt/homebrew"],
+              "environment": {
+                "set_vars": {
+                  "GIT_CONFIG_GLOBAL": "/dev/null",
+                  "GIT_CONFIG_SYSTEM": "/dev/null",
+                  "GIT_TERMINAL_PROMPT": "0",
+                  "XDG_CONFIG_HOME": "/private/var/empty"
+                }
+              }
+            },
+            "invocation_policy": { "default": "allow" }
           }
         }
       },

@@ -26,12 +26,11 @@ directory exists when they start. Never put hand-off files in a worktree.
    (expand `~`). If the repo is not git, tell me and ask how to isolate the work.
 4. Implement. Start an `implementer` with `--bg --cwd <that worktree>`, pointing it at `spec.md`.
    Wait with `hc wait --children`. If it blocks on a question for me, say so and tell me which
-   terminal to look at. It reports the review-request link (or branch) when done. It has no
-   code-host credentials, so it may only be able to push the branch: if it reports just a
-   branch, open the review request yourself from the worktree with the host's CLI (gh, glab,
-   az, ...), with title and body from the spec.
-5. Review. Start a `reviewer` in the same worktree with `spec.md`, the review-request link (it
-   cannot fetch it) and `review.md` as its output. Wait for its report.
+   terminal to look at. It reports the review-request link (or branch) when done. If it reports
+   just a branch, open the review request yourself from the worktree with the host's CLI (gh,
+   glab, az, ...), with title and body from the spec.
+5. Review. Start a `reviewer` in the same worktree with `spec.md`, the review-request link and
+   `review.md` as its output. Wait for its report.
 6. Tell me the verdict, the top findings and the path to `review.md`, then stop and wait for me.
    Never comment on, approve or merge the change, and never reply on the code host as me. Do not
    start another implementation round on your own. If I choose findings to fix, send exactly those

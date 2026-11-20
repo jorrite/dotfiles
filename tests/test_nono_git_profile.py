@@ -125,6 +125,100 @@ class EndpointRules(unittest.TestCase):
                 self.assertNotIn("*", rule["path"])
 
 
+class ForkParent(unittest.TestCase):
+    def lookup(self, payload):
+        return ngp.fork_parent("jorrite/atmos", runner=lambda cmd, timeout=None: payload)
+
+    def test_a_fork_has_a_parent(self):
+        self.assertEqual(self.lookup(json.dumps({"fork": True, "parent": {"full_name": "cloudposse/atmos"}})), "cloudposse/atmos")
+
+    def test_no_parent_when_it_is_not_a_fork_or_the_lookup_failed(self):
+        self.assertIsNone(self.lookup(json.dumps({"fork": False})))
+        self.assertIsNone(self.lookup(None))
+        self.assertIsNone(self.lookup("not json"))
+        self.assertIsNone(self.lookup("[]"))
+
+    def test_asks_gh_for_the_repo(self):
+        seen = []
+        ngp.fork_parent("jorrite/atmos", runner=lambda cmd, timeout=None: seen.append(cmd))
+        self.assertEqual(seen, [["gh", "api", "repos/jorrite/atmos"]])
+
+
+class PrTargets(unittest.TestCase):
+    def targets(self, remotes, parent=None):
+        calls = []
+
+        def runner(cmd, timeout=None):
+            calls.append(cmd[0])
+            if cmd[0] == "git":
+                return remotes.get(cmd[-1])
+            return json.dumps({"parent": {"full_name": parent}} if parent else {"fork": False})
+
+        return ngp.pr_targets("/repo", "jorrite/atmos", runner), calls
+
+    def test_the_upstream_remote_wins_and_no_lookup_is_needed(self):
+        found, calls = self.targets({"upstream": "git@github.com:cloudposse/atmos.git"}, parent="someone/else")
+        self.assertEqual(found, ["cloudposse/atmos"])
+        self.assertNotIn("gh", calls)
+
+    def test_a_fork_falls_back_to_its_parent(self):
+        self.assertEqual(self.targets({}, parent="cloudposse/atmos")[0], ["cloudposse/atmos"])
+
+    def test_an_upstream_on_another_host_does_not_count(self):
+        self.assertEqual(self.targets({"upstream": "https://gitlab.com/g/p.git"}, parent="cloudposse/atmos")[0], ["cloudposse/atmos"])
+
+    def test_nothing_when_there_is_no_upstream_and_no_fork(self):
+        self.assertEqual(self.targets({})[0], [])
+
+    def test_origin_is_never_its_own_target(self):
+        self.assertEqual(self.targets({"upstream": "https://github.com/Jorrite/Atmos.git"})[0], [])
+
+
+class GhPolicy(unittest.TestCase):
+    def test_reads_and_graphql_are_open_and_nothing_else_without_a_write_target(self):
+        self.assertEqual(ngp.gh_endpoint_rules(None, []), [{"method": "GET", "path": "/**"}, {"method": "POST", "path": "/graphql"}])
+
+    def test_rest_writes_only_on_the_write_target_and_a_pull_request_on_the_upstream(self):
+        rules = ngp.gh_endpoint_rules("jorrite/atmos", ["cloudposse/atmos"])
+        for method in ("POST", "PATCH", "PUT", "DELETE"):
+            self.assertIn({"method": method, "path": "/repos/jorrite/atmos"}, rules)
+            self.assertIn({"method": method, "path": "/repos/jorrite/atmos/**"}, rules)
+        self.assertIn({"method": "POST", "path": "/repos/cloudposse/atmos/pulls"}, rules)
+        self.assertFalse([r for r in rules if "cloudposse" in r["path"] and not r["path"].endswith("/pulls")])
+        self.assertEqual([r for r in rules if r["method"] == "GET"], [{"method": "GET", "path": "/**"}])
+
+    def test_without_a_write_target_gh_only_gets_read_subcommands(self):
+        policy = ngp.gh_invocation_policy(write=False)
+        self.assertEqual(policy["default"], "deny")
+        allowed = [rule["argv"]["prefix"] for rule in policy["allow"]]
+        for read in (["pr", "view"], ["issue", "list"], ["api"], ["search"]):
+            self.assertIn(read, allowed)
+        for write in (["pr", "create"], ["pr", "comment"], ["pr", "merge"], ["issue", "create"], ["repo", "delete"]):
+            self.assertNotIn(write, allowed)
+        self.assertIn({"contains": ["graphql"]}, [rule["argv"] for rule in policy["deny"]])
+
+    def test_with_a_write_target_gh_is_open_except_for_a_few_subcommands(self):
+        policy = ngp.gh_invocation_policy(write=True)
+        self.assertEqual(policy["default"], "allow")
+        denied = [rule["argv"]["prefix"] for rule in policy["deny"]]
+        for args in (["auth", "token"], ["auth", "login"], ["extension"], ["alias"], ["repo", "delete"]):
+            self.assertIn(args, denied)
+        self.assertNotIn(["pr", "create"], denied)
+
+    def test_the_command_chains_to_git_and_uses_the_phantom_credential(self):
+        profile = ngp.build_profile("jorrite/atmos", ["agent-base"], {}, targets=["cloudposse/atmos"])
+        gh = profile["command_policies"]["commands"]["gh"]
+        self.assertEqual(gh["can_use"], ["git"])
+        sandbox = gh["from"]["session"]["sandbox"]
+        self.assertEqual(sandbox["credentials"][0]["name"], "gh-api")
+        self.assertNotIn("GH_TOKEN", sandbox["environment"].get("set_vars", {}))  # nono supplies the placeholder
+        self.assertIn("/repos/cloudposse/atmos/pulls", [r["path"] for r in sandbox["credentials"][0]["endpoint_policy"]["allow"]])
+
+    def test_a_read_only_profile_has_the_read_only_gh(self):
+        profile = ngp.build_profile(None, ["agent-base"], {})
+        self.assertEqual(profile["command_policies"]["commands"]["gh"]["from"]["session"]["invocation_policy"]["default"], "deny")
+
+
 class BuildProfile(unittest.TestCase):
     launch = ngp.Launch(Path("/s/nono-git-profile/ab12cd34"))
 
