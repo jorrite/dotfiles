@@ -282,6 +282,16 @@ class BuildProfile(unittest.TestCase):
         self.assertEqual(config["user.signingkey"], "/s/nono-git-profile/ab12cd34/signing.pub")
         self.assertNotIn(f"GIT_CONFIG_KEY_{count}", set_vars)
 
+    def test_a_launch_without_signing_still_has_hooks_and_a_temp_dir_but_no_agent(self):
+        profile = ngp.build_profile("jorrite/mote", ["agent-base"], {}, ngp.Launch(self.launch.dir, sign=False))
+        self.assertEqual(profile["meta"]["name"], "git-ab12cd34")
+        self.assertEqual(profile["session_hooks"]["before"]["script"], "/s/nono-git-profile/ab12cd34/before.sh")
+        self.assertEqual(profile["session_hooks"]["after"]["script"], "/s/nono-git-profile/ab12cd34/after.sh")
+        self.assertEqual(profile["filesystem"], {"allow": ["/s/nono-git-profile/ab12cd34/tmp"]})
+        sandbox = self.sandbox(profile)
+        for key in ("unix_socket_bind", "fs_write", "fs_read_file", "environment"):
+            self.assertNotIn(key, sandbox)  # no socket, no signing config, no TMPDIR for git
+
     def test_input_env_is_not_modified(self):
         env = {"GIT_AUTHOR_NAME": "A"}
         ngp.build_profile(None, ["agent-base"], env, self.launch)
@@ -329,11 +339,20 @@ class LaunchDir(unittest.TestCase):
         self.assertEqual(launch.after.read_text(), f"#!/bin/sh\nexec '/hooks/git session hook' after {launch.dir}\n")
         self.assertTrue(os.access(launch.before, os.X_OK) and os.access(launch.after, os.X_OK))
 
-    def make(self, name, pid=None, age=0):
-        launch = ngp.Launch.new(self.state, name)
+    def test_a_launch_without_signing_tells_the_before_hook_so(self):
+        launch = ngp.Launch.new(self.state, "ab12cd34", sign=False)
         launch.create(Path("/h"))
-        if pid is not None:
-            (launch.dir / "pid").write_text(f"{pid}\n")
+        self.assertTrue(launch.tmp.is_dir())
+        self.assertEqual(launch.before.read_text(), f"#!/bin/sh\nexec /h before {launch.dir} nosign\n")
+        self.assertEqual(launch.after.read_text(), f"#!/bin/sh\nexec /h after {launch.dir}\n")
+
+    def make(self, name, owner=None, age=0, sign=True, agent=None):
+        launch = ngp.Launch.new(self.state, name, sign=sign)
+        launch.create(Path("/h"))
+        if owner is not None:
+            (launch.dir / "owner").write_text(f"{owner}\n")
+        if agent is not None:
+            (launch.dir / "pid").write_text(f"{agent}\n")
         old = time.time() - age
         os.utime(launch.dir, (old, old))
         return launch.dir
@@ -341,15 +360,45 @@ class LaunchDir(unittest.TestCase):
     def test_sweep_keeps_live_sessions_and_fresh_launches_and_removes_dead_ones(self):
         dead = subprocess.Popen(["true"])
         dead.wait()
-        live = self.make("11111111", pid=os.getpid())
+        live = self.make("11111111", owner=os.getpid())
         fresh = self.make("22222222")
-        gone = self.make("33333333", pid=dead.pid)
+        gone = self.make("33333333", owner=dead.pid)
         orphan = self.make("44444444", age=ngp.ORPHAN_AFTER + 60)
-        unrelated = self.state / "profiles"
+        unrelated = self.state / "not-a-launch"
         unrelated.mkdir()
         ngp.sweep(self.state)
         self.assertTrue(live.exists() and fresh.exists() and unrelated.exists())
         self.assertFalse(gone.exists() or orphan.exists())
+
+    def test_sweep_keeps_sessions_the_older_hook_started_which_only_recorded_the_agent(self):
+        # Applying this version must not delete the directory of a session that is still running
+        # from before it: the older before hook wrote `pid` (the agent) and no `owner`.
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        old = ngp.ORPHAN_AFTER * 24
+        running = self.make("66666666", agent=os.getpid(), age=old)
+        gone = self.make("77777777", agent=dead.pid, age=old)
+        ngp.sweep(self.state)
+        self.assertTrue(running.exists())
+        self.assertFalse(gone.exists())
+
+    def test_sweep_goes_by_nono_when_both_are_recorded_even_if_the_agent_lingers(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        lingering = self.make("88888888", owner=dead.pid, agent=os.getpid(), age=ngp.ORPHAN_AFTER * 2)
+        ngp.sweep(self.state)
+        self.assertFalse(lingering.exists())
+
+    def test_sweep_keeps_a_long_running_session_that_has_no_signing_agent(self):
+        # Liveness is nono's pid, not the agent's: a session without an agent has to survive
+        # past ORPHAN_AFTER, or the next launch would delete its temp dir while it runs.
+        old = ngp.ORPHAN_AFTER * 24
+        running = self.make("55555555", owner=os.getpid(), age=old, sign=False)
+        ngp.sweep(self.state)
+        self.assertTrue(running.exists())
+        (running / "owner").write_text("999999999\n")  # nono is gone, no after hook ran
+        ngp.sweep(self.state)
+        self.assertFalse(running.exists())
 
     def test_sweep_without_a_state_dir_is_fine(self):
         ngp.sweep(self.state / "missing")
@@ -467,8 +516,8 @@ class HookScript(unittest.TestCase):
             except (OSError, ValueError):
                 pass
 
-    def hook(self, mode, directory=None):
-        return subprocess.run([str(HOOK), mode, str(directory or self.dir)], env=self.env, capture_output=True, text=True)
+    def hook(self, mode, directory=None, *extra, **env):
+        return subprocess.run([str(HOOK), mode, str(directory or self.dir), *extra], env={**self.env, **env}, capture_output=True, text=True)
 
     def test_before_loads_only_the_key_and_after_cleans_everything_up(self):
         done = self.hook("before")
@@ -478,8 +527,10 @@ class HookScript(unittest.TestCase):
         self.assertEqual(len(listing), 1)
         self.assertIn("ED25519", listing[0])
         self.assertTrue((self.dir / "signing.pub").read_text().startswith("ssh-ed25519 "))
-        self.assertEqual(self.env_file.read_text(), f"TMPDIR={self.dir}/tmp\n")
+        # Claude's own tree (scratchpad, task output) goes into the launch dir along with TMPDIR.
+        self.assertEqual(self.env_file.read_text(), f"TMPDIR={self.dir}/tmp\nCLAUDE_CODE_TMPDIR={self.dir}/tmp\n")
         self.assertFalse(any(p.name == "key" or p.read_text(errors="ignore").startswith("-----BEGIN") for p in self.dir.rglob("*") if p.is_file()))
+        self.assertEqual(int((self.dir / "owner").read_text()), os.getpid())  # the hook's parent stands in for nono
         pid = int(( self.dir / "pid").read_text())
         os.kill(pid, 0)  # agent is running
 
@@ -490,6 +541,28 @@ class HookScript(unittest.TestCase):
                 os.kill(pid, 0)
                 time.sleep(0.1)
             os.kill(pid, 0)
+
+    def test_before_without_signing_sets_up_the_temp_dir_and_starts_no_agent_and_asks_for_no_key(self):
+        asked = self.tmp / "asked"
+        done = self.hook("before", None, "nosign", NONO_SIGNING_KEY_CMD=f"touch {asked}; cat {self.key}")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(self.env_file.read_text(), f"TMPDIR={self.dir}/tmp\nCLAUDE_CODE_TMPDIR={self.dir}/tmp\n")
+        self.assertEqual(int((self.dir / "owner").read_text()), os.getpid())
+        self.assertFalse(asked.exists(), "the key was read although nothing is signed")
+        for name in ("a", "pid", "signing.pub"):
+            self.assertFalse((self.dir / name).exists(), name)
+        self.assertEqual(self.hook("after").returncode, 0)
+        self.assertFalse(self.dir.exists())
+
+    def test_a_failed_key_load_still_leaves_the_directory_to_be_cleaned_up(self):
+        # before fails, nono carries on (hooks fail open): the session must still have its
+        # temp dir, and the watcher must still be there to remove it.
+        done = self.hook("before", None, NONO_SIGNING_KEY_CMD="false")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertEqual(self.env_file.read_text(), f"TMPDIR={self.dir}/tmp\nCLAUDE_CODE_TMPDIR={self.dir}/tmp\n")
+        self.assertTrue((self.dir / "owner").exists())
+        self.kill_agent()
+        self.hook("after")
 
     def test_refuses_directories_that_are_not_launch_dirs(self):
         for bad in [self.tmp / "nono-git-profile" / "not-a-launch-id", self.tmp / "elsewhere" / "ab12cd34", self.tmp]:
@@ -532,6 +605,25 @@ class HookScript(unittest.TestCase):
             time.sleep(0.1)
         with self.assertRaises(ProcessLookupError):
             os.kill(agent, 0)
+
+    def test_watcher_cleans_up_a_session_without_signing_too(self):
+        nono = subprocess.Popen(["sh", "-c", f'"{HOOK}" before "{self.dir}" nosign; exec sleep 120'], env=self.env)
+        self.addCleanup(lambda: nono.poll() is None and nono.kill())
+        for _ in range(100):
+            if (self.dir / "owner").exists():
+                break
+            time.sleep(0.1)
+        self.assertTrue((self.dir / "owner").exists(), "before never finished")
+        self.assertTrue(self.dir.exists())
+        time.sleep(2)  # a few polls: the directory stays for as long as nono runs
+        self.assertTrue(self.dir.exists())
+        nono.kill()
+        nono.wait()
+        for _ in range(150):
+            if not self.dir.exists():
+                break
+            time.sleep(0.1)
+        self.assertFalse(self.dir.exists(), "the watcher did not remove the launch dir")
 
     def test_unknown_mode_fails(self):
         self.assertEqual(self.hook("bogus").returncode, 1)
@@ -587,13 +679,50 @@ class AgainstNono(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertFalse(launch.exists())
 
-    def test_no_sign_profile_is_valid_read_only_and_has_no_launch_dir(self):
+    def test_no_sign_launch_is_valid_read_only_has_hooks_but_no_agent_and_its_stubs_clean_up(self):
         code, printed = self.generate("--no-sign")
         self.assertEqual(code, 0)
         profile = json.loads(Path(printed).read_text())
-        self.assertNotIn("session_hooks", profile)
+        launch = Path(printed).parent
+        self.assertEqual(launch.parent, self.state)
+        self.assertEqual(profile["meta"]["name"], f"git-{launch.name}")
+        self.assertIn("session_hooks", profile)
         self.assertNotIn("receive-pack", printed + json.dumps(profile))
-        self.assertEqual(Path(printed).parent, self.state / "profiles")
+        self.assertNotIn("unix_socket_bind", profile["command_policies"]["commands"]["git"]["sandbox"])
+        self.assertIn("nosign", (launch / "before.sh").read_text())
+        done = subprocess.run([str(launch / "after.sh")], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertFalse(launch.exists())
+
+    def session(self, *flags, script):
+        """Run `script` in a real nono session and return its launch dir and the result."""
+        work = self.tmp / "work"
+        work.mkdir(exist_ok=True)
+        code, printed = self.generate(*flags, cwd=work)
+        self.assertEqual(code, 0)
+        done = subprocess.run(["nono", "run", "-s", "--profile", printed, "--allow-cwd", "--", "sh", "-c", script], cwd=work, capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return Path(printed).parent, done
+
+    def test_a_session_without_signing_gets_its_own_temp_dir_that_is_gone_once_nono_exits(self):
+        launch, done = self.session("--no-sign", script='echo "$TMPDIR"; echo "$CLAUDE_CODE_TMPDIR"; touch "$TMPDIR/scratch" && echo wrote')
+        tmpdir, claude_tmp, wrote = done.stdout.split()
+        self.assertEqual(os.path.realpath(tmpdir), os.path.realpath(launch / "tmp"))
+        self.assertEqual(os.path.realpath(claude_tmp), os.path.realpath(launch / "tmp"))
+        self.assertEqual(wrote, "wrote")
+        self.assertFalse(launch.exists(), "the after hook did not remove the launch dir")
+
+    @unittest.skipUnless(shutil.which("ssh-agent") and shutil.which("ssh-keygen"), "openssh not installed")
+    def test_a_signing_session_gets_the_same_temp_dir_and_loses_its_agent_with_it(self):
+        key = self.tmp / "key"
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
+        with mock.patch.dict(os.environ, {"NONO_SIGNING_KEY_CMD": f"cat {key}"}):
+            launch, done = self.session(script='echo "$TMPDIR"; echo "$CLAUDE_CODE_TMPDIR"')
+        for value in done.stdout.split():
+            self.assertEqual(os.path.realpath(value), os.path.realpath(launch / "tmp"))
+        self.assertFalse(launch.exists())
+        agents = subprocess.run(["pgrep", "-f", f"{launch}/a"], capture_output=True, text=True)
+        self.assertEqual(agents.returncode, 1, "the signing agent is still running")
 
     def test_rm_cp_mv_work_inside_the_working_directory_only(self):
         work, outside = self.tmp / "work", self.tmp / "outside"
@@ -610,11 +739,14 @@ class AgainstNono(unittest.TestCase):
         self.assertTrue((outside / "o.txt").exists())  # not removed
         self.assertFalse((outside / "a.txt").exists())  # nothing moved in
         self.assertTrue((work / "a.txt").stat().st_mode & 0o400)  # chmod is still denied
+        self.assertFalse(Path(printed).parent.exists())  # and nono's after hook removed the launch dir
 
-    def test_missing_hook_is_an_error(self):
+    def test_missing_hook_is_an_error_in_every_mode(self):
         (self.xdg / "nono" / "hooks" / "git-session-hook").unlink()
-        code, _ = self.generate()
-        self.assertEqual(code, 1)
+        for flags in ((), ("--no-sign",)):
+            with self.subTest(flags=flags):
+                code, _ = self.generate(*flags)
+                self.assertEqual(code, 1)
 
     def test_repo_without_origin_can_still_read_but_not_push(self):
         git("remote", "remove", "origin", cwd=self.repo)
