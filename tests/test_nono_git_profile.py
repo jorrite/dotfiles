@@ -417,10 +417,10 @@ class AgainstNono(unittest.TestCase):
         git("init", "-q", cwd=self.repo)
         git("remote", "add", "origin", "https://github.com/jorrite/atmos.git", cwd=self.repo)
 
-    def generate(self, *extra):
+    def generate(self, *extra, cwd=None):
         with tempfile.TemporaryFile("w+") as out:
             with mock.patch("sys.stdout", out):
-                code = ngp.main(["--cwd", str(self.repo), "--state-dir", str(self.state), *([] if "--base" in extra else ["--base", "agent-base"]), *extra])
+                code = ngp.main(["--cwd", str(cwd or self.repo), "--state-dir", str(self.state), *([] if "--base" in extra else ["--base", "agent-base"]), *extra])
             out.seek(0)
             return code, out.read().strip()
 
@@ -451,6 +451,22 @@ class AgainstNono(unittest.TestCase):
         self.assertNotIn("session_hooks", profile)
         self.assertNotIn("receive-pack", printed + json.dumps(profile))
         self.assertEqual(Path(printed).parent, self.state / "profiles")
+
+    def test_rm_cp_mv_work_inside_the_working_directory_only(self):
+        work, outside = self.tmp / "work", self.tmp / "outside"
+        work.mkdir()
+        outside.mkdir()
+        (work / "a.txt").write_text("a")
+        (outside / "o.txt").write_text("o")
+        code, printed = self.generate("--no-sign", cwd=work)
+        self.assertEqual(code, 0)
+        script = "cp a.txt b.txt && mv b.txt c.txt && rm c.txt; rm ../outside/o.txt; mv a.txt ../outside/a.txt; chmod 000 a.txt; true"
+        subprocess.run(["nono", "run", "--profile", printed, "--allow-cwd", "--", "sh", "-c", script], cwd=work, capture_output=True, text=True)
+        self.assertTrue((work / "a.txt").exists())  # not moved out
+        self.assertFalse((work / "b.txt").exists() or (work / "c.txt").exists())  # copied, moved and removed inside
+        self.assertTrue((outside / "o.txt").exists())  # not removed
+        self.assertFalse((outside / "a.txt").exists())  # nothing moved in
+        self.assertTrue((work / "a.txt").stat().st_mode & 0o400)  # chmod is still denied
 
     def test_missing_hook_is_an_error(self):
         (self.xdg / "nono" / "hooks" / "git-session-hook").unlink()
